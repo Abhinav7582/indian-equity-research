@@ -1,0 +1,10 @@
+# ---------------------------------------------------------------------------
+# Automated-test overrides. Non-sensitive values only.
+#
+# Tests must be hermetic: no network access, no reliance on a developer's
+# local .env. The test settings deliberately use a minimal pool.
+# ---------------------------------------------------------------------------
+
+log_level: WARNING
+database_pool_size: 1
+database_connect_timeout_seconds: 2

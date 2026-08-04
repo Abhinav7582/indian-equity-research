@@ -1,0 +1,25 @@
+# ---------------------------------------------------------------------------
+# Non-sensitive project configuration shared by all environments.
+#
+# SECRETS MUST NEVER APPEAR IN THIS FILE OR ANY FILE IN configs/.
+# Credentials and connection details come from environment variables only.
+#
+# Precedence (lowest to highest):
+#   configs/base.yaml  <  configs/<APP_ENV>.yaml  <  environment variables
+# ---------------------------------------------------------------------------
+
+app_name: indian-equity-research
+log_level: INFO
+
+# Directory layout for the data lake. Paths are resolved relative to the
+# project root unless absolute.
+data_root: data
+raw_dir: data/raw
+interim_dir: data/interim
+processed_dir: data/processed
+reference_dir: data/reference
+
+# Connection pooling for the (not yet populated) research database.
+database_pool_size: 5
+database_pool_timeout_seconds: 10
+database_connect_timeout_seconds: 5

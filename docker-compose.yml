@@ -1,0 +1,36 @@
+# ---------------------------------------------------------------------------
+# Local development services.
+#
+# PostgreSQL only. This file starts nothing that reaches the internet and
+# contains no broker or exchange connectivity.
+#
+# Credentials below are LOCAL DEVELOPMENT DEFAULTS. They are overridden by
+# .env when present and must never be used outside a developer machine.
+# ---------------------------------------------------------------------------
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ier-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-equity_research}
+      POSTGRES_USER: ${DATABASE_USER:-equity_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-equity_password}
+      # Deterministic collation keeps index ordering reproducible across hosts.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-equity_user} -d ${DATABASE_NAME:-equity_research}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    name: ier_postgres_data

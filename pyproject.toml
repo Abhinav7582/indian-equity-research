@@ -1,0 +1,152 @@
+# ===========================================================================
+# Indian Equity Research System — project definition
+#
+# Phase 1: Research Foundation. No market data, no strategy, no broker.
+# The dependency set is deliberately minimal; every entry must justify itself.
+# ===========================================================================
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "indian-equity-research"
+version = "0.1.0"
+description = "Point-in-time research platform for Indian equities. Research only; no trading functionality."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Abhinav Singh" }]
+keywords = ["research", "equities", "india", "point-in-time"]
+classifiers = [
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    # Typed settings loaded from the environment.
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    # Non-sensitive layered project configuration.
+    "pyyaml>=6.0,<7",
+    # Database toolkit. 2.x typed API only.
+    "sqlalchemy>=2.0.36,<3",
+    # PostgreSQL driver. psycopg 3 is the supported driver for SQLAlchemy 2.x.
+    "psycopg[binary]>=3.2,<4",
+]
+
+# The CLI is intentionally built on argparse (standard library) rather than
+# click/typer. Three subcommands do not justify a dependency.
+
+[project.scripts]
+indian-equity-research = "indian_equity_research.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-cov>=6.0,<8",
+    "ruff>=0.8,<0.15",
+    "mypy>=1.13,<2",
+    "types-PyYAML>=6.0,<7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/indian_equity_research"]
+
+[tool.uv]
+default-groups = []
+
+# ---------------------------------------------------------------------------
+# Ruff — linting and formatting
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # flake8-bugbear
+    "A",         # flake8-builtins
+    "C4",        # flake8-comprehensions
+    "DTZ",       # flake8-datetimez  (naive datetimes are a real bug source here)
+    "T20",       # flake8-print      (use logging, not print, inside the package)
+    "SIM",       # flake8-simplify
+    "PTH",       # flake8-use-pathlib
+    "RET",       # flake8-return
+    "ARG",       # flake8-unused-arguments
+    "TRY",       # tryceratops       (enforces explicit error handling)
+    "BLE",       # flake8-blind-except (bans bare `except Exception`)
+    "RUF",       # ruff-specific
+    "D",         # pydocstyle
+]
+ignore = [
+    "D203",   # conflicts with D211
+    "D213",   # conflicts with D212
+    "TRY003", # long messages outside exception class: we want readable errors
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts and the CLI are user-facing console tools; printing is their purpose.
+"scripts/*" = ["T20"]
+"src/indian_equity_research/cli.py" = ["T20"]
+# Tests do not need module/class docstrings on every fixture.
+"tests/*" = ["D100", "D101", "D102", "D103", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# Mypy — static type checking
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests", "scripts"]
+mypy_path = "src"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+# Tests are fully annotated, but decorated pytest fixtures/marks are untyped
+# upstream; allow those decorators without weakening the rest of strict mode.
+disallow_untyped_decorators = false
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+]
+markers = [
+    "integration: requires a running PostgreSQL instance (skipped when unavailable)",
+]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["src/indian_equity_research"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
