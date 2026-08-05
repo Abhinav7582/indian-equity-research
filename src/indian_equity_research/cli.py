@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Final
 
 from indian_equity_research import __version__
@@ -45,7 +46,7 @@ EXIT_FAILURE: Final = 1
 #: This tuple is the enforced scope boundary for Phase 1: a test asserts it
 #: equals exactly these three entries, so adding an execution command cannot
 #: pass review unnoticed.
-COMMANDS: Final[tuple[str, ...]] = ("version", "config-check", "db-health")
+COMMANDS: Final[tuple[str, ...]] = ("version", "config-check", "db-health", "h4-regime")
 
 _PROGRAM = "indian-equity-research"
 _DESCRIPTION = (
@@ -68,9 +69,18 @@ def build_parser() -> argparse.ArgumentParser:
         "version": "Print the package version.",
         "config-check": "Validate configuration and print a summary with secrets masked.",
         "db-health": "Check PostgreSQL connectivity. Exits non-zero when unavailable.",
+        "h4-regime": "Score the H4 regime overlay against the Amendment A2 criteria.",
     }
-    for command in COMMANDS:
-        subparsers.add_parser(command, help=help_by_command[command])
+    created = {
+        command: subparsers.add_parser(command, help=help_by_command[command])
+        for command in COMMANDS
+    }
+    created["h4-regime"].add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Directory of manually downloaded index CSVs (default: <raw_dir>/indices).",
+    )
     return parser
 
 
@@ -124,6 +134,87 @@ def _check_database(settings: Settings) -> int:
     return EXIT_OK if health.is_healthy else EXIT_FAILURE
 
 
+def _run_h4(directory: Path) -> int:
+    """Run the H4 experiment and print the Amendment A2 scorecard."""
+    from indian_equity_research.data.csv_series import CsvSeriesError
+    from indian_equity_research.research.h4_experiment import load_inputs, run_experiment
+
+    try:
+        inputs = load_inputs(directory)
+    except CsvSeriesError as exc:
+        print(f"Could not load input data: {exc}")
+        print()
+        print(f"Expected these files in {directory}:")
+        for filename in (
+            "nifty200_momentum30_tri.csv",
+            "nifty100_pr.csv",
+            "india_vix.csv",
+            "nifty_1d_rate.csv  (optional)",
+        ):
+            print(f"  - {filename}")
+        print()
+        print("Download them by hand from niftyindices.com and nseindia.com.")
+        print("See docs/data_sources.md for why there is no scraper here.")
+        return EXIT_FAILURE
+
+    regime, windows = run_experiment(inputs)
+
+    print("H4 REGIME OVERLAY - scored against Amendment A2")
+    print("=" * 72)
+    print(f"Rule       : Nifty 100 < {regime.config.sma_window}d SMA")
+    print(
+        f"             AND India VIX > trailing {regime.config.vix_window}d "
+        f"{regime.config.vix_quantile:.0%} percentile"
+    )
+    print(f"Observations: {len(regime)}   RISK-OFF: {regime.fraction_risk_off():.1%} of dates")
+    print()
+
+    if not windows:
+        print("Not enough overlapping history to evaluate any window.")
+        return EXIT_FAILURE
+
+    for window in windows:
+        print("-" * 72)
+        print(f"{window.label}: {window.description}")
+        print()
+        print(f"  {'':22} {'overlaid':>14} {'buy & hold':>14}")
+        print(f"  {'net CAGR':22} {window.overlaid.cagr:>13.2%} {window.baseline.cagr:>13.2%}")
+        print(
+            f"  {'max drawdown':22} {window.overlaid.max_drawdown:>13.2%} "
+            f"{window.baseline.max_drawdown:>13.2%}"
+        )
+        print(
+            f"  {'volatility':22} {window.overlaid.volatility:>13.2%} "
+            f"{window.baseline.volatility:>13.2%}"
+        )
+        print(
+            f"  {'final value':22} {window.overlaid.final_value:>13,.0f} "
+            f"{window.baseline.final_value:>13,.0f}"
+        )
+        print()
+        print(f"  transaction costs paid : Rs {window.total_costs:,.0f}")
+        print(f"  capital gains tax paid : Rs {window.total_tax:,.0f}")
+        print()
+        for c in window.criteria:
+            mark = "PASS" if c.passed else "FAIL"
+            note = f"   ({c.note})" if c.note else ""
+            print(f"  [{mark}] {c.name:22} {c.observed:>14}  required {c.required}{note}")
+        print()
+        verdict = "SUPPORTED" if window.supported else "REJECTED"
+        print(f"  {window.label} verdict: H4 {verdict}")
+        print()
+
+    governing = windows[-1]
+    print("=" * 72)
+    print(f"GOVERNING WINDOW: {governing.label} (A2: the live window governs)")
+    print(f"H4 IS {'SUPPORTED' if governing.supported else 'REJECTED'}")
+    print()
+    print("Record this result in the HYPOTHESES.md trial register before acting on it.")
+    print("A2 also requires comparison against Nifty200 Momentum 30 Plus 8-13yr")
+    print("G-Sec 75:25; if that static blend matches this, H4 is rejected regardless.")
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point for the command-line interface.
 
@@ -151,6 +242,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _print_config(settings)
     if args.command == "db-health":
         return _check_database(settings)
+    if args.command == "h4-regime":
+        directory = args.data_dir or (settings.raw_dir / "indices")
+        return _run_h4(directory)
 
     # argparse enforces `required=True`, so this is defensive only.
     print(f"Unknown command: {args.command}")

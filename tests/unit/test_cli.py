@@ -27,13 +27,23 @@ class TestParser:
         Asserts on the declared command set rather than the help text, because
         the help text deliberately contains the words "place orders" in its
         safety notice.
+
+        The set grew by one in Phase 1.5 (`h4-regime`). That command reads
+        local CSVs and prints a scorecard; it opens no socket and places no
+        order. Any future addition must be reviewed against the same standard,
+        which is why this assertion is exact rather than a subset check.
         """
-        assert set(COMMANDS) == {"version", "config-check", "db-health"}
+        assert set(COMMANDS) == {"version", "config-check", "db-health", "h4-regime"}
 
     def test_every_declared_command_is_registered(self) -> None:
         parser = build_parser()
         for command in COMMANDS:
             assert parser.parse_args([command]).command == command
+
+    def test_h4_command_accepts_a_data_directory(self) -> None:
+        args = build_parser().parse_args(["h4-regime", "--data-dir", "/tmp/x"])
+        assert args.command == "h4-regime"
+        assert str(args.data_dir) == "/tmp/x"
 
     def test_no_command_can_reach_a_broker(self) -> None:
         """No CLI code path imports broker, execution or HTTP machinery."""
