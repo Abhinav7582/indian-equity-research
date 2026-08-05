@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from indian_equity_research.data.csv_series import load_price_series
+from indian_equity_research.data.csv_series import load_price_series_glob
 from indian_equity_research.research.metrics import (
     PerformanceSummary,
     drawdown_episodes,
@@ -35,7 +35,9 @@ from indian_equity_research.research.series import PriceSeries, align, simple_re
 __all__ = [
     "Criterion",
     "H4Inputs",
+    "SeriesReport",
     "WindowResult",
+    "describe_inputs",
     "evaluate_window",
     "load_inputs",
     "run_experiment",
@@ -153,18 +155,128 @@ class WindowResult:
         return self.baseline.cagr - self.overlaid.cagr
 
 
+@dataclass(frozen=True, slots=True)
+class SeriesReport:
+    """What was actually loaded, and whether it looks like the right thing.
+
+    Downloading the wrong series is the most likely mistake in this workflow -
+    price return instead of total return, the wrong index, or a truncated date
+    range. Those errors do not raise; they quietly produce a plausible-looking
+    number. These checks surface them before any result is printed.
+
+    Attributes:
+        name: Series identifier.
+        observations: Number of rows loaded.
+        first: Earliest date.
+        last: Latest date.
+        warnings: Human-readable concerns, empty when nothing looks wrong.
+    """
+
+    name: str
+    observations: int
+    first: date
+    last: date
+    warnings: tuple[str, ...] = ()
+
+
+#: Below this many observations a three-year rolling window cannot warm up.
+_MIN_USEFUL_OBSERVATIONS = 250
+#: India VIX has historically traded roughly between 8 and 90.
+_VIX_PLAUSIBLE_LOW = 5.0
+_VIX_PLAUSIBLE_HIGH = 150.0
+
+
+def _check_series(series: PriceSeries, *, is_vix: bool = False) -> SeriesReport:
+    """Sanity-check one loaded series.
+
+    Args:
+        series: The loaded series.
+        is_vix: Apply volatility-index range checks when ``True``.
+
+    Returns:
+        A report including any warnings.
+    """
+    warnings: list[str] = []
+    if len(series) < _MIN_USEFUL_OBSERVATIONS:
+        warnings.append(
+            f"only {len(series)} observations - too short for a 3-year rolling window; "
+            "download a longer date range"
+        )
+    span_years = (series.dates[-1] - series.dates[0]).days / 365.25
+    if span_years > 0 and len(series) / span_years < 150:
+        warnings.append(
+            f"~{len(series) / span_years:.0f} observations per year - expected ~250 for "
+            "daily data; the file may be weekly or monthly"
+        )
+    if is_vix:
+        lo, hi = min(series.closes), max(series.closes)
+        if lo < _VIX_PLAUSIBLE_LOW or hi > _VIX_PLAUSIBLE_HIGH:
+            warnings.append(
+                f"values range {lo:.1f}-{hi:.1f}, outside the plausible India VIX band "
+                f"({_VIX_PLAUSIBLE_LOW:.0f}-{_VIX_PLAUSIBLE_HIGH:.0f}) - is this really VIX?"
+            )
+    return SeriesReport(
+        name=series.name,
+        observations=len(series),
+        first=series.dates[0],
+        last=series.dates[-1],
+        warnings=tuple(warnings),
+    )
+
+
+def describe_inputs(inputs: H4Inputs) -> list[SeriesReport]:
+    """Report coverage and plausibility for every loaded series.
+
+    Args:
+        inputs: The loaded series.
+
+    Returns:
+        One report per series that was supplied.
+    """
+    reports = [
+        _check_series(inputs.strategy),
+        _check_series(inputs.market),
+        _check_series(inputs.vix, is_vix=True),
+    ]
+    if inputs.blend is not None:
+        reports.append(_check_series(inputs.blend))
+    if inputs.cash is not None:
+        reports.append(_check_series(inputs.cash))
+
+    # A total-return index must outgrow its own price-return counterpart over a
+    # long span. If the momentum series has not, it is probably the PR variant.
+    strategy_growth = inputs.strategy.closes[-1] / inputs.strategy.closes[0]
+    market_growth = inputs.market.closes[-1] / inputs.market.closes[0]
+    span = (inputs.strategy.dates[-1] - inputs.strategy.dates[0]).days / 365.25
+    if span > 5 and strategy_growth <= market_growth:
+        reports[0] = SeriesReport(
+            reports[0].name,
+            reports[0].observations,
+            reports[0].first,
+            reports[0].last,
+            (
+                *reports[0].warnings,
+                "grew no faster than the Nifty 100 price index over "
+                f"{span:.0f} years - check this is the TOTAL RETURN series, not price return",
+            ),
+        )
+    return reports
+
+
 def load_inputs(directory: Path) -> H4Inputs:
     """Load the four series from a directory of manually downloaded CSVs.
 
-    Expected filenames, all lower case:
+    Files are matched by glob, so a history downloaded one year at a time can
+    be dropped in as ``nifty100_pr_2015.csv``, ``nifty100_pr_2016.csv`` and so
+    on. Expected patterns, all lower case:
 
-    * ``nifty200_momentum30_tri.csv``
-    * ``nifty100_pr.csv``
-    * ``india_vix.csv``
-    * ``nifty200_momentum30_gsec_7525.csv`` (the static blend A2 compares
+    * ``nifty200_momentum30_tri*.csv``
+    * ``nifty100_pr*.csv``
+    * ``india_vix*.csv``
+    * ``nifty200_momentum30_gsec_7525*.csv`` (the static blend A2 compares
       against; without it the fifth criterion cannot be scored and H4 cannot
       be declared supported)
-    * ``nifty_1d_rate.csv`` (optional; cash earns 0% without it)
+    * ``nifty_1d_rate*.csv`` (optional; cash earns 0% without it)
 
     Args:
         directory: Directory containing the CSVs.
@@ -175,18 +287,24 @@ def load_inputs(directory: Path) -> H4Inputs:
     Raises:
         CsvSeriesError: If a required file is missing or malformed.
     """
-    cash_path = directory / "nifty_1d_rate.csv"
-    blend_path = directory / "nifty200_momentum30_gsec_7525.csv"
+    has_cash = any(directory.glob("nifty_1d_rate*.csv"))
+    has_blend = any(directory.glob("nifty200_momentum30_gsec_7525*.csv"))
     return H4Inputs(
-        strategy=load_price_series(
-            directory / "nifty200_momentum30_tri.csv", "Nifty200 Momentum 30 TRI"
+        strategy=load_price_series_glob(
+            directory, "nifty200_momentum30_tri*.csv", "Nifty200 Momentum 30 TRI"
         ),
-        market=load_price_series(directory / "nifty100_pr.csv", "Nifty 100 PR"),
-        vix=load_price_series(directory / "india_vix.csv", "India VIX"),
-        cash=load_price_series(cash_path, "Nifty 1D Rate") if cash_path.is_file() else None,
+        market=load_price_series_glob(directory, "nifty100_pr*.csv", "Nifty 100 PR"),
+        vix=load_price_series_glob(directory, "india_vix*.csv", "India VIX"),
+        cash=(
+            load_price_series_glob(directory, "nifty_1d_rate*.csv", "Nifty 1D Rate")
+            if has_cash
+            else None
+        ),
         blend=(
-            load_price_series(blend_path, "Momentum 30 + G-Sec 75:25")
-            if blend_path.is_file()
+            load_price_series_glob(
+                directory, "nifty200_momentum30_gsec_7525*.csv", "Momentum 30 + G-Sec 75:25"
+            )
+            if has_blend
             else None
         ),
     )

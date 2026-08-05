@@ -15,7 +15,7 @@ from pathlib import Path
 from indian_equity_research.exceptions import IndianEquityResearchError
 from indian_equity_research.research.series import PriceSeries
 
-__all__ = ["CsvSeriesError", "load_price_series"]
+__all__ = ["CsvSeriesError", "load_price_series", "load_price_series_glob"]
 
 #: Date layouts seen in NSE and NSE Indices exports.
 _DATE_FORMATS = (
@@ -178,4 +178,65 @@ def load_price_series(
         return PriceSeries.from_mapping(name, observations)  # type: ignore[arg-type]
     except ValueError as exc:
         message = f"{name}: {path.name} produced an invalid series: {exc}"
+        raise CsvSeriesError(message) from exc
+
+
+def load_price_series_glob(
+    directory: Path,
+    pattern: str,
+    name: str,
+    *,
+    date_column: str | None = None,
+    value_column: str | None = None,
+) -> PriceSeries:
+    """Load and merge every CSV matching a glob into one series.
+
+    Index providers cap a single download to a limited date range, so a long
+    history arrives as one file per year. This merges them.
+
+    Overlapping ranges are expected and tolerated **only when they agree**: a
+    date appearing in two files with the same value is a harmless overlap, a
+    date appearing with two different values means one of the files is wrong
+    and is rejected rather than silently resolved.
+
+    Args:
+        directory: Directory to search.
+        pattern: Glob pattern, e.g. ``"nifty100_pr*.csv"``.
+        name: Identifier for the merged series.
+        date_column: Explicit date column. Auto-detected when omitted.
+        value_column: Explicit value column. Auto-detected when omitted.
+
+    Returns:
+        The merged, date-ordered series.
+
+    Raises:
+        CsvSeriesError: If nothing matches, or two files disagree on a date.
+    """
+    paths = sorted(directory.glob(pattern))
+    if not paths:
+        message = (
+            f"{name}: no files matching {pattern!r} in {directory}. "
+            f"Download the CSV and save it there."
+        )
+        raise CsvSeriesError(message)
+
+    merged: dict[object, float] = {}
+    origin: dict[object, str] = {}
+    for path in paths:
+        part = load_price_series(path, name, date_column=date_column, value_column=value_column)
+        for when, value in part:
+            if when in merged and abs(merged[when] - value) > 1e-6:
+                message = (
+                    f"{name}: conflicting values for {when}: "
+                    f"{merged[when]} in {origin[when]} but {value} in {path.name}. "
+                    f"One of these files is wrong; remove it and re-download."
+                )
+                raise CsvSeriesError(message)
+            merged[when] = value
+            origin.setdefault(when, path.name)
+
+    try:
+        return PriceSeries.from_mapping(name, merged)  # type: ignore[arg-type]
+    except ValueError as exc:
+        message = f"{name}: merged {len(paths)} file(s) into an invalid series: {exc}"
         raise CsvSeriesError(message) from exc

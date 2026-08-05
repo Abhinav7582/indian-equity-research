@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from indian_equity_research.data.csv_series import CsvSeriesError, load_price_series
+from indian_equity_research.data.csv_series import (
+    CsvSeriesError,
+    load_price_series,
+    load_price_series_glob,
+)
 
 
 def write(tmp_path: Path, name: str, content: str) -> Path:
@@ -100,3 +104,42 @@ class TestStrictness:
         path = write(tmp_path, "s.csv", "Date,Close\n01-Jan-2021,0\n")
         with pytest.raises(CsvSeriesError, match="invalid series"):
             load_price_series(path, "S")
+
+
+class TestGlobMerge:
+    """Year-by-year downloads must merge safely."""
+
+    def test_merges_several_files_in_date_order(self, tmp_path: Path) -> None:
+        write(tmp_path, "x_2020.csv", "Date,Close\n01-Jan-2020,100\n02-Jan-2020,101\n")
+        write(tmp_path, "x_2021.csv", "Date,Close\n01-Jan-2021,110\n")
+        s = load_price_series_glob(tmp_path, "x_*.csv", "X")
+        assert len(s) == 3
+        assert s.closes == (100.0, 101.0, 110.0)
+
+    def test_tolerates_overlapping_ranges_that_agree(self, tmp_path: Path) -> None:
+        write(tmp_path, "x_a.csv", "Date,Close\n01-Jan-2020,100\n02-Jan-2020,101\n")
+        write(tmp_path, "x_b.csv", "Date,Close\n02-Jan-2020,101\n03-Jan-2020,102\n")
+        assert len(load_price_series_glob(tmp_path, "x_*.csv", "X")) == 3
+
+    def test_rejects_overlapping_ranges_that_disagree(self, tmp_path: Path) -> None:
+        """Two files claiming different closes for one date is a real error."""
+        write(tmp_path, "x_a.csv", "Date,Close\n02-Jan-2020,101\n")
+        write(tmp_path, "x_b.csv", "Date,Close\n02-Jan-2020,999\n")
+        with pytest.raises(CsvSeriesError, match="conflicting values"):
+            load_price_series_glob(tmp_path, "x_*.csv", "X")
+
+    def test_conflict_message_names_both_files(self, tmp_path: Path) -> None:
+        write(tmp_path, "x_a.csv", "Date,Close\n02-Jan-2020,101\n")
+        write(tmp_path, "x_b.csv", "Date,Close\n02-Jan-2020,999\n")
+        with pytest.raises(CsvSeriesError) as exc:
+            load_price_series_glob(tmp_path, "x_*.csv", "X")
+        assert "x_a.csv" in str(exc.value)
+        assert "x_b.csv" in str(exc.value)
+
+    def test_single_file_still_works(self, tmp_path: Path) -> None:
+        write(tmp_path, "x.csv", "Date,Close\n01-Jan-2020,100\n")
+        assert len(load_price_series_glob(tmp_path, "x*.csv", "X")) == 1
+
+    def test_no_match_names_the_pattern(self, tmp_path: Path) -> None:
+        with pytest.raises(CsvSeriesError, match="no files matching"):
+            load_price_series_glob(tmp_path, "absent*.csv", "X")

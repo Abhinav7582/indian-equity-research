@@ -137,7 +137,11 @@ def _check_database(settings: Settings) -> int:
 def _run_h4(directory: Path) -> int:
     """Run the H4 experiment and print the Amendment A2 scorecard."""
     from indian_equity_research.data.csv_series import CsvSeriesError
-    from indian_equity_research.research.h4_experiment import load_inputs, run_experiment
+    from indian_equity_research.research.h4_experiment import (
+        describe_inputs,
+        load_inputs,
+        run_experiment,
+    )
 
     try:
         inputs = load_inputs(directory)
@@ -157,6 +161,19 @@ def _run_h4(directory: Path) -> int:
         print("Download them by hand from niftyindices.com and nseindia.com.")
         print("See docs/data_sources.md for why there is no scraper here.")
         return EXIT_FAILURE
+
+    print("INPUT DATA")
+    print("=" * 72)
+    concerns = 0
+    for report in describe_inputs(inputs):
+        print(f"  {report.name:32} {report.observations:>6} rows  {report.first} to {report.last}")
+        for warning in report.warnings:
+            concerns += 1
+            print(f"      WARNING: {warning}")
+    if concerns:
+        print()
+        print(f"  {concerns} warning(s). Fix the input data before trusting any result below.")
+    print()
 
     regime, windows = run_experiment(inputs)
 
