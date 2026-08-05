@@ -123,3 +123,7 @@ plus a code version. Non-deterministic components, if ever added, may produce
 *features* but may never produce *decisions*.
 
 **Point-in-time or nothing.** See [`data_principles.md`](data_principles.md).
+
+**The benchmark is a product you can buy.** The primary signal is already an
+investable ETF at 0.22% a year. Any component built here must justify itself
+against that, not against a plain index. See [`benchmarks.md`](benchmarks.md).

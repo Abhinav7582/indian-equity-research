@@ -1,0 +1,221 @@
+# ===========================================================================
+# Continuous integration for the Indian Equity Research System.
+#
+# Three jobs:
+#   quality     - format, lint, types, unit tests   (fast, no services)
+#   integration - the same suite against PostgreSQL (service container)
+#   scope-guard - enforces the Phase 1 scope and safety boundaries
+#
+# Nothing here contacts an exchange, a broker or a market-data provider.
+# No secrets are required and none should ever be added to this workflow.
+# ===========================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: CI only needs to read the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep this in step with .python-version and pyproject.toml.
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # -------------------------------------------------------------------------
+  quality:
+    name: Format, lint, types, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.1"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Verify the lockfile is committed and current
+        # A stale or missing uv.lock means CI and local runs can silently
+        # resolve different dependency versions.
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Mypy (strict)
+        run: uv run mypy
+
+      - name: Unit tests
+        run: uv run pytest -m "not integration" tests/unit -v
+
+      - name: CLI smoke test
+        run: |
+          uv run python -m indian_equity_research version
+          uv run python -m indian_equity_research config-check
+          # db-health must exit non-zero when no database is reachable.
+          if uv run python -m indian_equity_research db-health; then
+            echo "::error::db-health exited 0 with no database available"
+            exit 1
+          fi
+          echo "db-health correctly exited non-zero"
+        env:
+          APP_ENV: test
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_PORT: "1"
+          DATABASE_SSL_MODE: disable
+
+  # -------------------------------------------------------------------------
+  integration:
+    name: Integration tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: equity_research
+          POSTGRES_USER: equity_user
+          POSTGRES_PASSWORD: equity_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U equity_user -d equity_research"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.1"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Integration tests
+        # These must actually run here, not skip. A silent skip would hide a
+        # broken database layer, so the run is asserted to contain no skips.
+        run: |
+          uv run pytest -m integration tests/integration -v --no-header -rs \
+            | tee /tmp/integration.log
+          if grep -q "SKIPPED" /tmp/integration.log; then
+            echo "::error::Integration tests skipped in CI - PostgreSQL was not reachable"
+            exit 1
+          fi
+        env:
+          TEST_DATABASE_HOST: localhost
+          TEST_DATABASE_PORT: "5432"
+          TEST_DATABASE_NAME: equity_research
+          TEST_DATABASE_USER: equity_user
+          # Local throwaway container credential. Not a secret.
+          TEST_DATABASE_PASSWORD: equity_password
+
+      - name: Database health check via the CLI
+        run: uv run python -m indian_equity_research db-health
+        env:
+          APP_ENV: test
+          DATABASE_HOST: localhost
+          DATABASE_PORT: "5432"
+          DATABASE_NAME: equity_research
+          DATABASE_USER: equity_user
+          DATABASE_PASSWORD: equity_password
+          DATABASE_SSL_MODE: disable
+
+  # -------------------------------------------------------------------------
+  scope-guard:
+    name: Scope and safety boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No broker, execution or HTTP dependencies
+        # This project is research-only. A broker client appearing in the
+        # dependency list is a scope violation, not a feature.
+        run: |
+          forbidden='growwapi|kiteconnect|smartapi|fyers|dhanhq|alice|upstox|ccxt|binance'
+          if grep -inE "^\s*\"?($forbidden)" pyproject.toml; then
+            echo "::error::A broker/execution dependency was added. See docs/adr/0001."
+            exit 1
+          fi
+          echo "No broker dependencies. OK."
+
+      - name: No credentials committed
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env is tracked by git"
+            exit 1
+          fi
+          # A committed credential is a quoted string literal. Requiring the
+          # quotes avoids flagging legitimate keyword arguments such as
+          # `password=self.database_password.get_secret_value()`.
+          if git grep -InE \
+              "(password|passwd|secret|token|api[_-]?key)[\"']?\s*[:=]\s*[\"'][A-Za-z0-9._/+-]{12,}[\"']" \
+              -- '*.yaml' '*.yml' '*.toml' '*.md' '*.py' \
+              | grep -viE "(replace_me|example|placeholder|equity_password|your_|xxx|redact|sup3r|hunter2|secret-value|visible-secret|level-secret|health-secret)"; then
+            echo "::error::Possible credential literal committed. Review the matches above."
+            exit 1
+          fi
+          # configs/ must contain no credential fields at all, quoted or not.
+          if git grep -InE "^\s*(password|passwd|secret|token|api[_-]?key)\s*:" -- 'configs/'; then
+            echo "::error::configs/ must never contain credential fields. Use environment variables."
+            exit 1
+          fi
+          echo "No credentials found. OK."
+
+      - name: No market data committed
+        # data/ is git-ignored, but `git add -f` bypasses that. Exchange data
+        # must never be redistributed - see docs/data_sources.md.
+        run: |
+          tracked=$(git ls-files data/ | grep -v '\.gitkeep$' || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::Files tracked under data/: $tracked"
+            exit 1
+          fi
+          echo "data/ contains only .gitkeep placeholders. OK."
+
+      - name: Pre-registration integrity
+        # HYPOTHESES.md must exist and carry H1-H6. Statuses legitimately
+        # change as work proceeds, so only presence and structure are checked.
+        run: |
+          for h in H1 H2 H3 H4 H5 H6; do
+            grep -q "^## $h " HYPOTHESES.md || {
+              echo "::error::$h missing from HYPOTHESES.md"; exit 1; }
+          done
+          grep -q "^## Amendment log" HYPOTHESES.md || {
+            echo "::error::Amendment log removed from HYPOTHESES.md"; exit 1; }
+          echo "H1-H6 and the amendment log are present. OK."

@@ -342,6 +342,88 @@ treated as if it had been observed.
 
 ---
 
+---
+
+# AMENDMENT A1 — Benchmark set expanded
+
+**Date: 2026-08-04**
+**Made before any data was ingested and before any hypothesis was tested.**
+**Nothing above this line has been altered. This amendment is additive.**
+
+## What prompted it
+
+A review of India's investable factor indices (see
+[`docs/benchmarks.md`](docs/benchmarks.md)) established that the primary
+signal registered in H1 — 12-1 momentum on a Nifty 200 universe — is already
+sold as a product. NSE publishes the **Nifty200 Momentum 30** index, and at
+least five asset managers offer it as an ETF or index fund at **0.22%–0.30%
+a year**.
+
+The benchmark fixed at registration (Nifty 100 TRI) is therefore **necessary
+but not sufficient**. An off-the-shelf ETF beats it with no work, so beating
+it proves nothing about this project.
+
+## What changes
+
+**Baseline B3 becomes mandatory and blocking for H2, H3, H4 and H6.**
+
+| ID | Baseline | Status |
+|---|---|---|
+| B1 | Nifty 100 TRI, buy and hold | Mandatory (unchanged) |
+| B2 | Equal-weighted Nifty 100, annual rebalance | Mandatory (unchanged) |
+| **B3** | **Nifty200 Momentum 30 TRI, less 0.22% expense, taxed as LTCG on exit rather than annually** | **Mandatory and blocking (new)** |
+| B4 | The strategy with all signals randomised | Mandatory (unchanged) |
+
+**A strategy that fails to beat B3 net of costs and net of tax is rejected,
+regardless of its performance against B1.**
+
+## The arithmetic this reflects
+
+Assuming the DIY system and the ETF capture the same gross momentum return:
+
+| | Momentum ETF | DIY manual | DIY with Groww API |
+|---|---|---|---|
+| Annual cost drag | 0.22% | 1.32% | 3.68% |
+| Tax on gains | 12.5% LTCG, deferred | 20% STCG, annual | 20% STCG, annual |
+| **Shortfall vs ETF at 15% gross** | — | **−3.84 pp/yr** | **−5.72 pp/yr** |
+
+**The system must out-perform the momentum index by ~3.8 percentage points a
+year just to draw level.** This is the real bar. It was not visible at
+registration and is recorded here rather than discovered later.
+
+## What this does to the hypotheses
+
+**H1 and H2 are unchanged in wording.** H2 acquires B3 as an additional
+blocking baseline through this amendment.
+
+**H3, H4 and H6 become the investment case.** The index is a fixed, public,
+semi-annual rule. It cannot exclude a stock the day it enters ASM/GSM, cannot
+apply a governance filter, cannot de-risk into cash in an adverse regime, and
+cannot concentrate below 30 names. Those four capabilities are the only
+plausible sources of edge over B3 — and they are precisely what H3, H4 and H6
+already test.
+
+**No rejection criterion registered above has been weakened.** One baseline
+has been added, which makes every test strictly harder.
+
+## Pre-committed consequence
+
+**If H3, H4 and H6 all fail while H1 succeeds, the correct action is to buy
+the momentum ETF and stop building.** Recording that now, before any result
+exists, is the point of this file.
+
+## Recommended change to the benchmark holding
+
+The report accompanying Phase 1 recommended holding ₹2,25,000 in a Nifty 100
+index fund as the live benchmark. This amendment recommends that the
+benchmark position be held in a **Nifty200 Momentum 30 ETF or index fund**
+instead, or split across both. Holding the thing you are trying to beat, in
+size, is the strongest available defence against self-deception.
+
+⚠ This is a portfolio decision, not a research finding. Confirm expense
+ratios, AUM, liquidity and tracking error on current AMC factsheets before
+acting, and take tax advice on holding-period treatment.
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -359,6 +441,7 @@ Sharpe Ratio.
 | Date | Hypothesis | Change | Reason | Made before testing? |
 |---|---|---|---|---|
 | 2026-08-04 | — | Initial registration of H1–H6 | Phase 1 foundation | Yes — no data existed |
+| 2026-08-04 | H2 (and H3/H4/H6 by reference) | **Amendment A1** — added Baseline B3 (Nifty200 Momentum 30, net of 0.22% and LTCG) as a mandatory blocking baseline | The primary signal is already an investable product; the original benchmark was insufficient | Yes — no data ingested, nothing tested |
 
 ---
 

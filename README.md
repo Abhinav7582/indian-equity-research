@@ -158,12 +158,19 @@ tests/       Unit and integration suites
 
 ## Documentation
 
-- [`HYPOTHESES.md`](HYPOTHESES.md) — pre-registered hypotheses H1–H6. **Read
-  this before writing any research code.**
+- [`HYPOTHESES.md`](HYPOTHESES.md) — pre-registered hypotheses H1–H6, plus
+  Amendment A1. **Read this before writing any research code.**
+- [`docs/benchmarks.md`](docs/benchmarks.md) — **the real bar.** The primary
+  signal is already sold as an ETF at 0.22%; this computes what the system
+  must beat and why.
 - [`docs/architecture.md`](docs/architecture.md) — target architecture, with
   every future component marked unimplemented
 - [`docs/data_principles.md`](docs/data_principles.md) — the non-negotiable
   data rules
+- [`docs/factor_evidence.md`](docs/factor_evidence.md) — what the evidence
+  supports for Indian equities, and which sources to distrust
+- [`docs/data_sources.md`](docs/data_sources.md) — Phase 2 data acquisition:
+  sources, costs, the 2024 bhavcopy format change, licensing boundaries
 - [`docs/adr/`](docs/adr/) — architecture decision records
 
 ## Security
