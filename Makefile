@@ -11,7 +11,36 @@
 
 UV ?= uv
 RUN := $(UV) run
-COMPOSE ?= docker compose
+
+# Compose invocation differs by install method:
+#   - Docker Desktop / recent Docker Engine -> `docker compose` (plugin)
+#   - older or Homebrew-formula installs     -> `docker-compose` (standalone)
+# Detect rather than assume, so a wrong guess does not surface as the very
+# confusing "unknown shorthand flag: 'd' in -d".
+COMPOSE ?= $(shell \
+	if docker compose version >/dev/null 2>&1; then echo "docker compose"; \
+	elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; \
+	else echo "NOCOMPOSE"; fi)
+
+define require_compose
+	@if [ "$(COMPOSE)" = "NOCOMPOSE" ]; then \
+		echo "Docker Compose was not found."; \
+		echo ""; \
+		echo "  1. Install Docker Desktop:  brew install --cask docker"; \
+		echo "  2. LAUNCH IT ONCE:          open -a Docker"; \
+		echo "     (first launch installs the compose CLI plugin)"; \
+		echo "  3. Verify:                  docker compose version"; \
+		echo ""; \
+		echo "Integration tests are optional locally - they run in CI."; \
+		echo "Everything else works without Docker: make check"; \
+		exit 1; \
+	fi
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "Docker is installed but the daemon is not running."; \
+		echo "Start it with:  open -a Docker   (wait for the whale icon)"; \
+		exit 1; \
+	fi
+endef
 
 help:  ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -65,9 +94,11 @@ check: format-check lint typecheck test-unit  ## Everything CI runs.
 # Local database
 # --------------------------------------------------------------------------
 db-up:  ## Start PostgreSQL in the background.
+	$(call require_compose)
 	$(COMPOSE) up -d postgres
 
 db-wait:  ## Block until PostgreSQL reports healthy.
+	$(call require_compose)
 	@echo "Waiting for PostgreSQL..."
 	@for i in $$(seq 1 30); do \
 		if $(COMPOSE) exec -T postgres pg_isready -q; then echo "ready"; exit 0; fi; \
@@ -75,9 +106,11 @@ db-wait:  ## Block until PostgreSQL reports healthy.
 	done; echo "PostgreSQL did not become ready in time"; exit 1
 
 db-down:  ## Stop PostgreSQL (the data volume is preserved).
+	$(call require_compose)
 	$(COMPOSE) down
 
 db-logs:  ## Tail the PostgreSQL logs.
+	$(call require_compose)
 	$(COMPOSE) logs -f postgres
 
 # --------------------------------------------------------------------------
