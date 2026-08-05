@@ -424,6 +424,136 @@ size, is the strongest available defence against self-deception.
 ratios, AUM, liquidity and tracking error on current AMC factsheets before
 acting, and take tax advice on holding-period treatment.
 
+---
+
+# AMENDMENT A2 — H4 regime definition declared
+
+**Date: 2026-08-04**
+**Declared before any price series was downloaded, plotted or examined.**
+**Nothing above this line has been altered. This amendment is additive.**
+
+## Why this exists
+
+H4 was registered with its regime definition marked **DEFERRED**, under four
+constraints: at most two inputs, each observable at the close and never
+revised, thresholds that are fixed constants or unconditional percentiles
+rather than fitted values, and a rule expressible in one sentence.
+
+This amendment discharges that obligation. It is written first because a
+regime rule chosen after looking at the data is not a hypothesis — it is a
+description of the data.
+
+## The rule
+
+> **RISK-OFF when the Nifty 100 closes below its 200-day simple moving average
+> AND India VIX closes above its trailing three-year 80th percentile.
+> Otherwise RISK-ON.**
+
+In RISK-OFF the strategy holds **100% cash**. In RISK-ON it holds **100% of
+the underlying strategy**. Binary, with no intermediate exposure, because
+intermediate levels are another free parameter.
+
+Regime is evaluated **only on rebalance dates**, using data available at the
+previous close. Never intraday.
+
+## Why each choice, stated before results exist
+
+| Choice | Reason |
+|---|---|
+| **Two inputs only** | Every additional input multiplies the ways to accidentally fit history. |
+| **Nifty 100 price index for the trend** | A price index, not total return: a moving average on a TRI drifts upward with reinvested dividends and slowly biases the signal. |
+| **200-day SMA** | The most widely used trend threshold in existence, and — critically — a value fixed long before this project. A lookback I had searched for would be indistinguishable from noise-fitting to an outside reader. |
+| **India VIX, trailing 3-year 80th percentile** | A *rolling unconditional* percentile, so no future information enters. A percentile rather than an absolute level because VIX levels drift across decades. |
+| **AND, not OR** | Requiring both conditions trades responsiveness for far fewer false alarms. The cost is accepted openly: this rule will be **slow to de-risk** and will miss fast crashes. |
+| **Binary exposure** | An exposure ladder (100/50/0) adds parameters without adding theory. |
+| **Rebalance-date evaluation only** | Daily evaluation would multiply switches, costs and tax events. |
+
+## Data to be used
+
+| Series | Source | Role |
+|---|---|---|
+| Nifty200 Momentum 30 **TRI**, daily | NSE Indices historical data | The strategy return stream being overlaid |
+| Nifty 100 **PR**, daily | NSE Indices historical data | Input to the 200-day SMA |
+| India VIX, daily close | NSE | Input to the percentile threshold |
+| Nifty 1D Rate Index | NSE Indices | Cash return while RISK-OFF |
+
+If the Nifty 1D Rate series is unavailable, cash earns **0%**. That
+understates the overlay's benefit, which is the safe direction to be wrong in.
+
+## Evaluation windows — and an honesty constraint
+
+The Nifty200 Momentum 30 index has a base date of 1 April 2005 but a **launch
+date of 25 August 2020**. Everything before the launch is back-tested,
+constructed with hindsight about which rules worked. India VIX history begins
+around 2008–2009, which sets the practical start.
+
+Two windows will therefore be reported **separately, never blended**:
+
+| Window | Nature |
+|---|---|
+| **W1 — full available history** (from the first date all four series exist) | Contains a long back-tested segment |
+| **W2 — live only** (2020-08-25 onward) | The only genuinely out-of-sample evidence |
+
+**Pre-committed rule: where W1 and W2 disagree materially, W2 governs.** A
+result that works only on the simulated segment is not evidence.
+
+## Costs that must be modelled
+
+A regime overlay is not free. Each switch liquidates and repurchases the
+entire portfolio.
+
+1. **Transaction costs:** 0.55% per full round trip, applied on every RISK-ON
+   → RISK-OFF → RISK-ON cycle.
+2. **Tax:** every RISK-OFF exit realises gains at **20% STCG** and resets the
+   holding period. An overlay that trades twice a year permanently forfeits
+   the 12.5% LTCG treatment its buy-and-hold comparator enjoys. This is the
+   overlay's largest hidden cost and it must appear in the result, not a
+   footnote.
+3. **Signal lag:** regime computed on close of day *T* is acted on at day
+   *T+1* at the earliest.
+
+## Pass and fail criteria
+
+**H4 is SUPPORTED only if all of the following hold, in W2:**
+- Maximum drawdown is reduced by **at least 20% relative** to the unoverlaid
+  index.
+- Net CAGR, after transaction costs and STCG, falls by **no more than 2
+  percentage points** annualised.
+- Average regime switches are **at most 8 per year**.
+- The drawdown benefit is present in **more than one distinct episode**.
+
+**H4 is REJECTED if any of the following holds:**
+- Relative drawdown reduction < 20%.
+- Net CAGR falls more than 2 points.
+- More than 8 switches per year on average.
+- The entire benefit comes from a single historical episode.
+- **The benefit is matched or exceeded by NSE's published
+  `Nifty200 Momentum 30 Plus 8-13yr G-Sec 75:25` index** — because if a static
+  bond blend achieves the same drawdown reduction with no machinery, no
+  switching cost and no tax event, the dynamic overlay has no reason to exist.
+
+That last criterion is the one most likely to fail, and it was added
+deliberately.
+
+## What this experiment can and cannot establish
+
+**Can:** whether this specific rule reduces drawdown on the momentum factor's
+own return stream, net of costs and tax, on live data.
+
+**Cannot:** whether it would help a 12–15 stock portfolio, which is a noisier
+version of the same exposure. A pass here is necessary, not sufficient. A
+**fail here is sufficient to reject H4 entirely** — if the overlay cannot help
+the clean index, it will not help a noisier proxy of it.
+
+This asymmetry is the reason the cheap experiment runs before the expensive
+data pipeline.
+
+## Scope
+
+Phase 1.5. No stock-level data, no corporate actions, no index membership
+reconstruction, no survivorship-bias handling — index series only. Estimated
+effort ~2 RU, against ~21 RU for the full pipeline needed to test H1 and H2.
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -442,6 +572,7 @@ Sharpe Ratio.
 |---|---|---|---|---|
 | 2026-08-04 | — | Initial registration of H1–H6 | Phase 1 foundation | Yes — no data existed |
 | 2026-08-04 | H2 (and H3/H4/H6 by reference) | **Amendment A1** — added Baseline B3 (Nifty200 Momentum 30, net of 0.22% and LTCG) as a mandatory blocking baseline | The primary signal is already an investable product; the original benchmark was insufficient | Yes — no data ingested, nothing tested |
+| 2026-08-04 | H4 | **Amendment A2** — declared the regime definition, data sources, evaluation windows, cost model and pass/fail criteria | H4 was registered with its definition DEFERRED; it must be fixed before testing | Yes — no price series downloaded, nothing plotted |
 
 ---
 
