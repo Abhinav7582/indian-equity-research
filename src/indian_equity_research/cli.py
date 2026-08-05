@@ -149,6 +149,7 @@ def _run_h4(directory: Path) -> int:
             "nifty200_momentum30_tri.csv",
             "nifty100_pr.csv",
             "india_vix.csv",
+            "nifty200_momentum30_gsec_7525.csv  (required by A2 criterion 5)",
             "nifty_1d_rate.csv  (optional)",
         ):
             print(f"  - {filename}")
@@ -197,21 +198,30 @@ def _run_h4(directory: Path) -> int:
         print()
         for c in window.criteria:
             mark = "PASS" if c.passed else "FAIL"
+            if not c.evaluated:
+                mark = "----"
             note = f"   ({c.note})" if c.note else ""
-            print(f"  [{mark}] {c.name:22} {c.observed:>14}  required {c.required}{note}")
+            print(f"  [{mark}] {c.name:22} {c.observed:>34}  required {c.required}{note}")
         print()
-        verdict = "SUPPORTED" if window.supported else "REJECTED"
+        if not window.fully_evaluated:
+            verdict = "INCOMPLETE - a required criterion could not be scored"
+        else:
+            verdict = "SUPPORTED" if window.supported else "REJECTED"
         print(f"  {window.label} verdict: H4 {verdict}")
         print()
 
     governing = windows[-1]
     print("=" * 72)
     print(f"GOVERNING WINDOW: {governing.label} (A2: the live window governs)")
-    print(f"H4 IS {'SUPPORTED' if governing.supported else 'REJECTED'}")
+    if not governing.fully_evaluated:
+        print("H4 VERDICT: INCOMPLETE")
+        print()
+        print("At least one A2 criterion could not be scored, so H4 cannot be")
+        print("declared supported. An unscored criterion is not a pass.")
+    else:
+        print(f"H4 IS {'SUPPORTED' if governing.supported else 'REJECTED'}")
     print()
     print("Record this result in the HYPOTHESES.md trial register before acting on it.")
-    print("A2 also requires comparison against Nifty200 Momentum 30 Plus 8-13yr")
-    print("G-Sec 75:25; if that static blend matches this, H4 is rejected regardless.")
     return EXIT_OK
 
 

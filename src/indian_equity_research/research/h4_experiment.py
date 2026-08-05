@@ -60,12 +60,17 @@ class H4Inputs:
         market: Nifty 100 price return index, input to the trend condition.
         vix: India VIX daily closes.
         cash: Overnight rate index used while in cash. Optional.
+        blend: Nifty200 Momentum 30 Plus 8-13yr G-Sec 75:25. The static
+            alternative the overlay must beat under A2. Optional only in the
+            sense that the code runs without it; A2 requires it before H4 can
+            be declared supported.
     """
 
     strategy: PriceSeries
     market: PriceSeries
     vix: PriceSeries
     cash: PriceSeries | None = None
+    blend: PriceSeries | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,10 +79,15 @@ class Criterion:
 
     Attributes:
         name: Short identifier.
-        passed: Whether the criterion is satisfied.
+        passed: Whether the criterion is satisfied. Meaningless when
+            ``evaluated`` is ``False``.
         observed: The measured value, formatted.
         required: The declared threshold, formatted.
         note: Optional clarification.
+        evaluated: ``False`` when the data needed to score this criterion was
+            not supplied. An unevaluated criterion is **not** a pass; the
+            overall verdict is incomplete until every criterion has been
+            scored.
     """
 
     name: str
@@ -85,6 +95,7 @@ class Criterion:
     observed: str
     required: str
     note: str = ""
+    evaluated: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,9 +125,18 @@ class WindowResult:
     total_tax: float
 
     @property
+    def fully_evaluated(self) -> bool:
+        """Whether every criterion had the data needed to score it."""
+        return all(c.evaluated for c in self.criteria)
+
+    @property
     def supported(self) -> bool:
-        """Whether every criterion passed for this window."""
-        return all(c.passed for c in self.criteria)
+        """Whether every criterion was scored and passed.
+
+        An unscored criterion cannot count as a pass. H4 is supported only
+        when the full A2 set has been evaluated.
+        """
+        return self.fully_evaluated and all(c.passed for c in self.criteria)
 
     @property
     def drawdown_reduction(self) -> float:
@@ -141,6 +161,9 @@ def load_inputs(directory: Path) -> H4Inputs:
     * ``nifty200_momentum30_tri.csv``
     * ``nifty100_pr.csv``
     * ``india_vix.csv``
+    * ``nifty200_momentum30_gsec_7525.csv`` (the static blend A2 compares
+      against; without it the fifth criterion cannot be scored and H4 cannot
+      be declared supported)
     * ``nifty_1d_rate.csv`` (optional; cash earns 0% without it)
 
     Args:
@@ -153,6 +176,7 @@ def load_inputs(directory: Path) -> H4Inputs:
         CsvSeriesError: If a required file is missing or malformed.
     """
     cash_path = directory / "nifty_1d_rate.csv"
+    blend_path = directory / "nifty200_momentum30_gsec_7525.csv"
     return H4Inputs(
         strategy=load_price_series(
             directory / "nifty200_momentum30_tri.csv", "Nifty200 Momentum 30 TRI"
@@ -160,6 +184,11 @@ def load_inputs(directory: Path) -> H4Inputs:
         market=load_price_series(directory / "nifty100_pr.csv", "Nifty 100 PR"),
         vix=load_price_series(directory / "india_vix.csv", "India VIX"),
         cash=load_price_series(cash_path, "Nifty 1D Rate") if cash_path.is_file() else None,
+        blend=(
+            load_price_series(blend_path, "Momentum 30 + G-Sec 75:25")
+            if blend_path.is_file()
+            else None
+        ),
     )
 
 
@@ -171,6 +200,7 @@ def evaluate_window(
     states: list[Regime],
     cash_returns: list[float] | None,
     config: OverlayConfig,
+    blend_closes: list[float] | None = None,
 ) -> WindowResult:
     """Score one evaluation window against the A2 criteria.
 
@@ -182,6 +212,9 @@ def evaluate_window(
         states: Lagged regime states, parallel to ``dates``.
         cash_returns: Cash returns while de-risked, length ``len(dates) - 1``.
         config: Cost and tax parameters.
+        blend_closes: Closes of the static momentum/G-Sec blend, parallel to
+            ``dates``. When omitted the fifth A2 criterion is reported as not
+            evaluated.
 
     Returns:
         The scored window.
@@ -236,6 +269,7 @@ def evaluate_window(
             f">= {MIN_DISTINCT_EPISODES}",
             note="benefit must not rest on a single historical episode",
         ),
+        _score_static_blend(dates, blend_closes, overlaid_summary, config),
     )
 
     return WindowResult(
@@ -248,6 +282,52 @@ def evaluate_window(
         distinct_episodes=len(episodes),
         total_costs=overlaid.total_costs,
         total_tax=overlaid.total_tax,
+    )
+
+
+def _score_static_blend(
+    dates: list[date],
+    blend_closes: list[float] | None,
+    overlaid: PerformanceSummary,
+    config: OverlayConfig,
+) -> Criterion:
+    """Score the overlay against NSE's static momentum/G-Sec blend.
+
+    Amendment A2 rejects H4 if a static blend matches or exceeds the overlay's
+    drawdown benefit, because such a blend needs no machinery, incurs no
+    switching cost and triggers no tax event. A dynamic rule has to beat doing
+    nothing clever, not merely beat doing nothing.
+
+    Args:
+        dates: Evaluation dates.
+        blend_closes: Blend index closes, parallel to ``dates``.
+        overlaid: Summary of the overlaid strategy.
+        config: Cost parameters, used for the blend's single entry cost.
+
+    Returns:
+        The scored criterion, marked unevaluated when the blend is absent.
+    """
+    if blend_closes is None:
+        return Criterion(
+            "beats static blend",
+            passed=False,
+            observed="not supplied",
+            required="overlay drawdown < blend drawdown",
+            note="A2 requires this; add nifty200_momentum30_gsec_7525.csv",
+            evaluated=False,
+        )
+    blend = buy_and_hold(dates, blend_closes, config)
+    blend_summary = summarise("static blend", blend.dates, blend.post_tax_curve, blend.returns())
+    beats = overlaid.max_drawdown < blend_summary.max_drawdown
+    return Criterion(
+        "beats static blend",
+        passed=beats,
+        observed=(
+            f"{overlaid.max_drawdown:.1%} vs {blend_summary.max_drawdown:.1%} "
+            f"(CAGR {overlaid.cagr:+.1%} vs {blend_summary.cagr:+.1%})"
+        ),
+        required="overlay drawdown < blend drawdown",
+        note="a static 75:25 blend needs no switching, no tax, no machinery",
     )
 
 
@@ -278,13 +358,19 @@ def run_experiment(
 
     regime_as_series = PriceSeries("regime-dates", regime.dates, tuple(1.0 for _ in regime.dates))
     series_to_align: list[PriceSeries] = [inputs.strategy, regime_as_series]
+    cash_index = blend_index = None
     if inputs.cash is not None:
+        cash_index = len(series_to_align)
         series_to_align.append(inputs.cash)
+    if inputs.blend is not None:
+        blend_index = len(series_to_align)
+        series_to_align.append(inputs.blend)
 
     aligned = align(*series_to_align)
     dates = list(aligned[0])
     strategy_closes = list(aligned[1][0])
-    cash_levels = list(aligned[1][2]) if inputs.cash is not None else None
+    cash_levels = list(aligned[1][cash_index]) if cash_index is not None else None
+    blend_levels = list(aligned[1][blend_index]) if blend_index is not None else None
 
     state_by_date = dict(zip(regime.dates, lagged, strict=True))
     states = [state_by_date[d] for d in dates]
@@ -304,6 +390,7 @@ def run_experiment(
                 states[first:],
                 cash_returns[first:] if cash_returns else None,
                 ovl_cfg,
+                blend_levels[first:] if blend_levels else None,
             )
         )
 
@@ -320,6 +407,7 @@ def run_experiment(
                 states[start:],
                 cash_returns[start:] if cash_returns else None,
                 ovl_cfg,
+                blend_levels[start:] if blend_levels else None,
             )
         )
 

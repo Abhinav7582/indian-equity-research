@@ -60,7 +60,7 @@ class TestRunExperiment:
         regime, _ = run_experiment(build_inputs(), regime_config=SMALL_CONFIG)
         assert 0.0 < regime.fraction_risk_off() < 1.0
 
-    def test_every_criterion_is_scored(self) -> None:
+    def test_every_criterion_is_present(self) -> None:
         _, windows = run_experiment(build_inputs(), regime_config=SMALL_CONFIG)
         names = {c.name for c in windows[0].criteria}
         assert names == {
@@ -68,6 +68,7 @@ class TestRunExperiment:
             "CAGR sacrifice",
             "switching frequency",
             "multiple episodes",
+            "beats static blend",
         }
 
     def test_overlay_reduces_drawdown_on_this_synthetic_market(self) -> None:
@@ -123,3 +124,51 @@ class TestLoadInputs:
         regime, windows = run_experiment(load_inputs(tmp_path), regime_config=SMALL_CONFIG)
         assert len(regime) == DAYS
         assert windows
+
+
+class TestStaticBlendCriterion:
+    """A2 criterion 5: the overlay must beat doing nothing clever."""
+
+    def test_unscored_without_the_blend_series(self) -> None:
+        _, windows = run_experiment(build_inputs(), regime_config=SMALL_CONFIG)
+        blend = next(c for c in windows[0].criteria if c.name == "beats static blend")
+        assert blend.evaluated is False
+        assert "not supplied" in blend.observed
+
+    def test_missing_blend_makes_the_window_incomplete(self) -> None:
+        _, windows = run_experiment(build_inputs(), regime_config=SMALL_CONFIG)
+        assert windows[0].fully_evaluated is False
+
+    def test_an_unscored_criterion_is_never_a_pass(self) -> None:
+        """The failure mode this guards: silently treating absent data as success."""
+        _, windows = run_experiment(build_inputs(), regime_config=SMALL_CONFIG)
+        assert windows[0].supported is False
+
+    def test_scored_when_the_blend_is_supplied(self) -> None:
+        base = build_inputs()
+        # A blend that is far smoother than the strategy: the overlay should lose.
+        smooth = PriceSeries(
+            "BLEND",
+            base.strategy.dates,
+            tuple(1000.0 * (1.0004**i) for i in range(len(base.strategy))),
+        )
+        inputs = H4Inputs(strategy=base.strategy, market=base.market, vix=base.vix, blend=smooth)
+        _, windows = run_experiment(inputs, regime_config=SMALL_CONFIG)
+        blend = next(c for c in windows[0].criteria if c.name == "beats static blend")
+        assert blend.evaluated is True
+        assert blend.passed is False  # a monotonic blend has no drawdown to beat
+        assert windows[0].fully_evaluated is True
+
+    def test_overlay_wins_against_a_volatile_blend(self) -> None:
+        base = build_inputs()
+        _, _, market, _ = synthetic()
+        # A "blend" that is actually worse than the strategy.
+        volatile = PriceSeries(
+            "BLEND",
+            base.strategy.dates,
+            tuple(m * (0.5 if 300 <= i < 400 else 1.0) for i, m in enumerate(market)),
+        )
+        inputs = H4Inputs(strategy=base.strategy, market=base.market, vix=base.vix, blend=volatile)
+        _, windows = run_experiment(inputs, regime_config=SMALL_CONFIG)
+        blend = next(c for c in windows[0].criteria if c.name == "beats static blend")
+        assert blend.passed is True
