@@ -28,12 +28,24 @@ class TestParser:
         the help text deliberately contains the words "place orders" in its
         safety notice.
 
-        The set grew by one in Phase 1.5 (`h4-regime`). That command reads
-        local CSVs and prints a scorecard; it opens no socket and places no
-        order. Any future addition must be reviewed against the same standard,
-        which is why this assertion is exact rather than a subset check.
+        The set has grown twice: `h4-regime` in Phase 1.5 (reads local CSVs,
+        opens no socket) and `archive` in Phase 2a (fetches published exchange
+        files, one request per source per day, and writes only into the
+        git-ignored data directory).
+
+        Neither can place an order. The invariant this guards is **no broker
+        connectivity and no order placement**, not "never add a command" -
+        which is why `test_no_broker_dependency_anywhere` below is the real
+        boundary and this assertion is the tripwire that forces a reviewer to
+        look.
         """
-        assert set(COMMANDS) == {"version", "config-check", "db-health", "h4-regime"}
+        assert set(COMMANDS) == {
+            "version",
+            "config-check",
+            "db-health",
+            "h4-regime",
+            "archive",
+        }
 
     def test_every_declared_command_is_registered(self) -> None:
         parser = build_parser()
@@ -46,12 +58,38 @@ class TestParser:
         assert str(args.data_dir) == "/tmp/x"
 
     def test_no_command_can_reach_a_broker(self) -> None:
-        """No CLI code path imports broker, execution or HTTP machinery."""
+        """No CLI code path references broker or order-placement machinery."""
         import indian_equity_research.cli as cli_module
 
         source = Path(cli_module.__file__ or "").read_text(encoding="utf-8").lower()
-        for forbidden in ("growwapi", "place_order", "requests", "httpx", "urllib", "socket"):
+        for forbidden in ("growwapi", "place_order", "modify_order", "cancel_order"):
             assert forbidden not in source
+
+    def test_no_broker_dependency_anywhere_in_the_package(self) -> None:
+        """The real scope boundary: no broker SDK is imported by any module."""
+        import indian_equity_research
+
+        package_root = Path(indian_equity_research.__file__ or "").parent
+        forbidden = (
+            "growwapi",
+            "kiteconnect",
+            "smartapi",
+            "fyers",
+            "dhanhq",
+            "upstox",
+            "ccxt",
+            "binance",
+        )
+        for module in package_root.rglob("*.py"):
+            text = module.read_text(encoding="utf-8").lower()
+            for name in forbidden:
+                assert name not in text, f"{module.name} references {name}"
+
+    def test_archive_command_flags(self) -> None:
+        args = build_parser().parse_args(["archive", "--check", "--delay", "5"])
+        assert args.command == "archive"
+        assert args.check is True
+        assert args.delay == 5.0
 
 
 class TestVersionCommand:
