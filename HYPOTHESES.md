@@ -245,8 +245,13 @@ history; the strategy's own daily net returns.
 - More than 8 regime switches per year on average (excessive whipsaw).
 - The benefit is confined to a single historical episode.
 
-**Status:** `NOT_TESTED`
+**Status:** `REJECTED` (2026-08-06, trial #1)
 **Registered:** 2026-08-04
+**Result:** Rejected in both windows. In the governing window W2 the overlay
+*increased* maximum drawdown (34.5% vs 28.4%), sacrificed 3.63 pp of annual
+return, and lost to the static 75:25 blend on drawdown and return
+simultaneously. **All seven exit-and-re-enter cycles repurchased at a higher
+price than they sold.** No criterion was rewritten. See trial #1 below.
 
 ---
 
@@ -562,7 +567,67 @@ Sharpe Ratio.
 
 | # | Date | Hypothesis | Configuration | Data snapshot | Commit | Outcome |
 |---|---|---|---|---|---|---|
-| — | — | — | *No trials run. No market data has been ingested.* | — | — | — |
+| **1** | 2026-08-06 | **H4** | A2 regime rule as declared: Nifty 100 < 200d SMA AND India VIX > trailing 756d 80th pct; monthly evaluation; 1-period lag; 0.55% round trip; 20% STCG; cash at 0% | NSE Indices + NSE: Nifty 100 PR 2003-2026, Momentum 30 TRI 2005-2026, India VIX 2010-2026, Momentum30+G-Sec 75:25 2011-2026 | `5fed927` | **REJECTED** (see below) |
+
+---
+
+
+### Trial #1 detail - H4 regime overlay
+
+**Run:** 2026-08-06 · **Windows:** W1 2013-07-23 to 2026-08-05 (contains
+back-tested index history), W2 2020-08-25 to 2026-08-05 (live; governs).
+**Regime fired on 9.8% of dates; ~0.8-1.0 switches per year.**
+
+| Metric | Overlaid | Buy & hold | Static 75:25 blend |
+|---|---|---|---|
+| W2 net CAGR | 14.59% | **18.21%** | 15.3% |
+| W2 max drawdown | 34.49% | 28.37% | **22.0%** |
+| W1 net CAGR | 14.13% | **18.66%** | 16.1% |
+| W1 max drawdown | 36.30% | 28.37% | **22.0%** |
+
+**Criteria (W2, governing):**
+
+| Criterion | Observed | Required | Outcome |
+|---|---|---|---|
+| Drawdown reduction | **−21.6%** (i.e. drawdown got *worse*) | ≥ +20% relative | **FAIL** |
+| CAGR sacrifice | +3.63% p.a. | ≤ 2% p.a. | **FAIL** |
+| Switching frequency | 0.8/yr | ≤ 8/yr | PASS |
+| Multiple episodes | 2 | ≥ 2 | PASS |
+| Beats static blend | 34.5% vs 22.0% DD | overlay DD < blend DD | **FAIL** |
+
+**Mechanism, verified rather than assumed.** Every one of the seven complete
+exit-and-re-enter cycles repurchased at a higher price than it sold:
+
+| Exit | Index | Re-entry | Index | Round trip |
+|---|---|---|---|---|
+| 2013-09-02 | 3,810 | 2013-11-01 | 4,303 | +12.9% |
+| 2015-09-01 | 7,197 | 2015-10-01 | 7,491 | +4.1% |
+| 2018-11-01 | 11,741 | 2018-12-03 | 12,374 | +5.4% |
+| 2019-02-01 | 12,751 | 2019-04-01 | 13,210 | +3.6% |
+| 2020-03-02 | 13,504 | 2020-08-03 | 13,756 | +1.9% |
+| 2022-03-02 | 23,321 | 2022-04-01 | 24,773 | +6.2% |
+| 2026-04-01 | 34,769 | 2026-06-01 | 37,610 | +8.2% |
+
+**0 of 7 helped.** Both inputs confirm *after* the move: a 200-day average and
+a three-year volatility percentile are lagging by construction, and monthly
+evaluation adds further delay. The rule sells into weakness and rebuys into
+strength. Even the March 2020 exit - well timed, ahead of the worst of the
+crash - failed because re-entry did not come until August, missing the
+recovery.
+
+**Costs, for the record:** W2 transaction costs Rs 6,989 and capital gains tax
+Rs 13,509 on a Rs 3,00,000 book. The tax was roughly twice the trading cost,
+as Amendment A2 anticipated.
+
+**What this does and does not establish.** It rejects *this* rule, as declared.
+It does not establish that no regime overlay can work. Testing a different
+definition is legitimate and requires a new dated amendment *before* testing,
+and would be logged here as trial #2 - because the more definitions tried, the
+more likely one succeeds by chance.
+
+**Consequence under Amendment A1.** A1 identified H3, H4 and H6 as the only
+plausible sources of edge over a 0.22% momentum ETF. **One of the three is now
+gone.**
 
 ---
 

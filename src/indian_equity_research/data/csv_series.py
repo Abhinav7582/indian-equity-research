@@ -199,8 +199,12 @@ def load_price_series_glob(
     date appearing with two different values means one of the files is wrong
     and is rejected rather than silently resolved.
 
+    The search is recursive, so files may sit loose in ``directory`` or be
+    grouped into one subfolder per series - whichever is tidier for the person
+    doing the downloading.
+
     Args:
-        directory: Directory to search.
+        directory: Directory to search, including subdirectories.
         pattern: Glob pattern, e.g. ``"nifty100_pr*.csv"``.
         name: Identifier for the merged series.
         date_column: Explicit date column. Auto-detected when omitted.
@@ -212,11 +216,11 @@ def load_price_series_glob(
     Raises:
         CsvSeriesError: If nothing matches, or two files disagree on a date.
     """
-    paths = sorted(directory.glob(pattern))
+    paths = sorted(directory.rglob(pattern))
     if not paths:
         message = (
-            f"{name}: no files matching {pattern!r} in {directory}. "
-            f"Download the CSV and save it there."
+            f"{name}: no files matching {pattern!r} under {directory} "
+            f"(searched subdirectories too). Download the CSV and save it there."
         )
         raise CsvSeriesError(message)
 

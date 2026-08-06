@@ -266,9 +266,10 @@ def describe_inputs(inputs: H4Inputs) -> list[SeriesReport]:
 def load_inputs(directory: Path) -> H4Inputs:
     """Load the four series from a directory of manually downloaded CSVs.
 
-    Files are matched by glob, so a history downloaded one year at a time can
-    be dropped in as ``nifty100_pr_2015.csv``, ``nifty100_pr_2016.csv`` and so
-    on. Expected patterns, all lower case:
+    Files are matched by a recursive glob, so a history downloaded one year at
+    a time can be dropped in as ``nifty100_pr_2015.csv``,
+    ``nifty100_pr_2016.csv`` and so on, either loose in the directory or
+    grouped into one subfolder per series. Expected patterns, all lower case:
 
     * ``nifty200_momentum30_tri*.csv``
     * ``nifty100_pr*.csv``
@@ -287,8 +288,8 @@ def load_inputs(directory: Path) -> H4Inputs:
     Raises:
         CsvSeriesError: If a required file is missing or malformed.
     """
-    has_cash = any(directory.glob("nifty_1d_rate*.csv"))
-    has_blend = any(directory.glob("nifty200_momentum30_gsec_7525*.csv"))
+    has_cash = any(directory.rglob("nifty_1d_rate*.csv"))
+    has_blend = any(directory.rglob("nifty200_momentum30_gsec_7525*.csv"))
     return H4Inputs(
         strategy=load_price_series_glob(
             directory, "nifty200_momentum30_tri*.csv", "Nifty200 Momentum 30 TRI"

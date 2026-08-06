@@ -92,6 +92,12 @@ documented as a target, not as a description of what exists.**
 | Date utilities (`utils/dates.py`) | **Implemented** (weekday/timezone only) | 1 |
 | Database base, engine, sessions, health | **Implemented** | 1 |
 | CLI | **Implemented** (read-only commands) | 1 |
+| Causal series statistics (`research/series.py`) | **Implemented** | 1.5 |
+| Regime rule (`research/regime.py`) | **Implemented** | 1.5 |
+| Performance & drawdown metrics (`research/metrics.py`) | **Implemented** | 1.5 |
+| Cost/tax overlay (`research/overlay.py`) | **Implemented** | 1.5 |
+| CSV series loader (`data/csv_series.py`) | **Implemented** | 1.5 |
+| H4 experiment & scorecard (`research/h4_experiment.py`) | **Implemented** | 1.5 |
 | Database schema / ORM models | Not implemented | 2 |
 | Market-data collector | Not implemented | 2 |
 | Corporate-action processor | Not implemented | 2 |
@@ -123,6 +129,11 @@ plus a code version. Non-deterministic components, if ever added, may produce
 *features* but may never produce *decisions*.
 
 **Point-in-time or nothing.** See [`data_principles.md`](data_principles.md).
+
+**Phase 1.5 is index-level only.** The modules above consume published index
+series read from local CSVs. They contain no stock-level logic, no corporate
+actions and no universe reconstruction; those arrive with Phase 2 and are what
+H1, H2, H3 and H6 require.
 
 **The benchmark is a product you can buy.** The primary signal is already an
 investable ETF at 0.22% a year. Any component built here must justify itself

@@ -143,3 +143,63 @@ class TestGlobMerge:
     def test_no_match_names_the_pattern(self, tmp_path: Path) -> None:
         with pytest.raises(CsvSeriesError, match="no files matching"):
             load_price_series_glob(tmp_path, "absent*.csv", "X")
+
+
+class TestRealNseIndicesFormats:
+    """Samples of the shapes niftyindices.com actually exports.
+
+    Kept as regression tests so a future refactor of the loader cannot
+    silently stop reading the files this project depends on.
+    """
+
+    def test_hybrid_index_with_placeholder_ohl(self, tmp_path: Path) -> None:
+        """Multi-asset indices publish only a close; OHL come through as '-'."""
+        path = write(
+            tmp_path,
+            "blend.csv",
+            "Index Name,Index Date,Open Index Value,High Index Value,"
+            "Low Index Value,Closing Index Value\n"
+            "NIFTY200 MOMENTUM 30 PLUS 8-13 YR G-SEC 75:25,31 Dec 2021,-,-,-,5789.57\n"
+            "NIFTY200 MOMENTUM 30 PLUS 8-13 YR G-SEC 75:25,30 Dec 2021,-,-,-,5743.48\n",
+        )
+        s = load_price_series(path, "Blend")
+        assert len(s) == 2
+        assert s.closes == (5743.48, 5789.57)
+
+    def test_equity_index_with_separators_and_extra_columns(self, tmp_path: Path) -> None:
+        path = write(
+            tmp_path,
+            "n100.csv",
+            "Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,"
+            "Closing Index Value,Points Change,Change(%),P/E,P/B,Div Yield\n"
+            'NIFTY 100,01-Jan-2021,"13,981.95","14,049.85","13,951.70","14,018.50",'
+            "36.55,0.26,33.42,3.85,1.05\n",
+        )
+        assert load_price_series(path, "N100").closes == (14018.50,)
+
+    def test_rows_exported_newest_first_are_reordered(self, tmp_path: Path) -> None:
+        """The site lists most recent first; the series must still be ascending."""
+        path = write(
+            tmp_path,
+            "x.csv",
+            "Index Date,Closing Index Value\n31 Dec 2021,300\n30 Dec 2021,200\n29 Dec 2021,100\n",
+        )
+        s = load_price_series(path, "X")
+        assert s.closes == (100.0, 200.0, 300.0)
+        assert s.dates[0] < s.dates[-1]
+
+    def test_finds_files_in_subdirectories(self, tmp_path: Path) -> None:
+        """Downloads are often grouped one folder per series."""
+        (tmp_path / "series_a").mkdir()
+        write(tmp_path / "series_a", "x_2020.csv", "Date,Close\n01-Jan-2020,100\n")
+        write(tmp_path / "series_a", "x_2021.csv", "Date,Close\n01-Jan-2021,110\n")
+        assert len(load_price_series_glob(tmp_path, "x_*.csv", "X")) == 2
+
+    def test_does_not_cross_match_similar_prefixes(self, tmp_path: Path) -> None:
+        """`..._tri*` must not pick up `..._gsec_7525*` from a sibling folder."""
+        (tmp_path / "a").mkdir()
+        (tmp_path / "b").mkdir()
+        write(tmp_path / "a", "mom30_tri_2020.csv", "Date,Close\n01-Jan-2020,100\n")
+        write(tmp_path / "b", "mom30_gsec_7525_2020.csv", "Date,Close\n01-Jan-2020,999\n")
+        s = load_price_series_glob(tmp_path, "mom30_tri*.csv", "TRI")
+        assert s.closes == (100.0,)

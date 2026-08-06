@@ -27,6 +27,11 @@ rather than as a trading system.
 
 ## Current phase
 
+**Phase 1.5 — complete.** The first hypothesis has been tested and rejected:
+see [`HYPOTHESES.md`](HYPOTHESES.md) trial #1. The regime overlay declared in
+Amendment A2 increased drawdown rather than reducing it, and lost to a static
+75:25 momentum/G-Sec blend. Cost: ~2 units of effort, no capital at risk.
+
 **Phase 1 — Research Foundation.** Project skeleton, typed configuration,
 structured logging, database plumbing, a small read-only CLI, tests, and the
 pre-registered hypotheses in [`HYPOTHESES.md`](HYPOTHESES.md).
@@ -111,7 +116,13 @@ uv run python scripts/verify_environment.py
 uv run python -m indian_equity_research version        # prints the version
 uv run python -m indian_equity_research config-check   # validates config, masks secrets
 uv run python -m indian_equity_research db-health      # exits non-zero if unreachable
+uv run python -m indian_equity_research h4-regime      # score H4 against Amendment A2
 ```
+
+`h4-regime` reads index CSVs from `data/raw/indices/` (git-ignored, downloaded
+by hand — see [`docs/data_sources.md`](docs/data_sources.md) for why there is
+no scraper) and prints a scorecard against criteria fixed before the data
+existed. It opens no socket and places no order.
 
 Exit codes: `0` success, `1` check failed, `2` usage error.
 

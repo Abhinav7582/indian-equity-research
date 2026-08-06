@@ -4,6 +4,27 @@
 indices. This document changes what this project must beat, and it is the
 single most decision-relevant page in `docs/`.
 
+> ### UPDATE 2026-08-06 - H4 rejected
+>
+> Section 5 below listed four capabilities the index lacks, and named them as
+> the entire investment case for building this. **One has since been tested
+> and rejected.**
+>
+> Trial #1 found that the declared regime overlay *increased* maximum drawdown
+> (34.5% vs 28.4% in the live window), gave up 3.6 pp of annual return, and was
+> beaten by the static 75:25 blend on drawdown and return simultaneously. All
+> seven exit-and-re-enter cycles repurchased higher than they sold. See
+> [`../HYPOTHESES.md`](../HYPOTHESES.md) trial #1.
+>
+> **Two edge sources remain: H3 (quality filter) and H6 (governance and
+> surveillance exclusions), plus concentration.** Both require the full Phase 2
+> data pipeline; neither can be tested cheaply the way H4 was.
+>
+> A second finding, unplanned but material: the **static 75:25 momentum/G-Sec
+> blend** delivered a lower drawdown (22.0%) *and* a better Calmar ratio than
+> the pure momentum index, with no machinery, no switching cost and no tax
+> event. It is now a serious third option alongside the momentum ETF.
+
 ---
 
 ## 1. The problem in one paragraph
@@ -105,13 +126,14 @@ The index is a fixed, public, semi-annually rebalanced rule. It cannot:
 
 - exclude a stock the day it goes onto ASM/GSM (**H6**)
 - apply a governance or auditor-resignation filter (**H6**)
-- de-risk into cash during an adverse regime (**H4**)
+- de-risk into cash during an adverse regime (**H4** - ~~untested~~ **REJECTED
+  2026-08-06**, trial #1)
 - apply a quality screen to remove the distress tail (**H3**)
 - concentrate into 12–15 names rather than 30
 
-**Those four capabilities are the entire investment case for building this.**
-They are exactly H3, H4 and H6 — which is fortunate, because they were
-registered before this research was done.
+**Those capabilities are the entire investment case for building this.** They
+were exactly H3, H4 and H6 - registered before this research was done. **H4 is
+now rejected**, leaving H3, H6 and concentration.
 
 **It does mean H2 must be restated.** Beating the Nifty 100 TRI was never a
 sufficient test: an ETF beats it with no work. The real question is whether
@@ -128,8 +150,9 @@ the strategy beats *the momentum index*, after costs and after tax.
 3. **The benchmark position should arguably be the momentum ETF, not a plain
    index fund.** Holding the thing you are trying to beat, in size, is the
    most effective defence against self-deception this project has.
-4. **If H3/H4/H6 all fail, the correct action is explicit:** buy the ETF, stop
-   building, and keep the research code as the thing that told you the truth.
+4. **If H3/H4/H6 all fail, the correct action is explicit:** buy the ETF (or
+   the 75:25 blend), stop building, and keep the research code as the thing
+   that told you the truth. **H4 has failed. Two remain.**
 
 ## 7. Open questions for Phase 2
 
