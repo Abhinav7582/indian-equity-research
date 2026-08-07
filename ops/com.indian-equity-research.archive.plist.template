@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily archive job for macOS launchd.
+
+  Why launchd rather than cron: if the Mac is asleep at the scheduled time,
+  launchd runs the job when it next wakes. cron simply skips it. Since the
+  whole point of this archiver is that a missed day is unrecoverable, that
+  difference matters more than the extra XML.
+
+  Install:  make archive-install
+  Remove:   make archive-uninstall
+  Logs:     data/raw/archive/launchd.out and launchd.err
+
+  __PROJECT_DIR__ and __UV__ are substituted by the Makefile target.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.indian-equity-research.archive</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__UV__</string>
+        <string>run</string>
+        <string>python</string>
+        <string>-m</string>
+        <string>indian_equity_research</string>
+        <string>archive</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <!-- Weekdays at 19:00 local time, after the exchange files are published. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <!-- Run a missed occurrence once the machine wakes. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/data/raw/archive/launchd.out</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/data/raw/archive/launchd.err</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>APP_ENV</key>
+        <string>development</string>
+    </dict>
+</dict>
+</plist>

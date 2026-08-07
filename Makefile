@@ -7,7 +7,8 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help install format format-check lint typecheck test test-unit test-integration \
-        check db-up db-down db-logs db-wait config-check db-health version verify bootstrap clean
+        check db-up db-down db-logs db-wait config-check db-health version verify bootstrap clean \
+        archive archive-check archive-install archive-uninstall archive-status archive-logs
 
 UV ?= uv
 RUN := $(UV) run
@@ -124,6 +125,44 @@ config-check:  ## Validate configuration (secrets stay masked).
 
 db-health:  ## Check database connectivity (non-zero exit when unavailable).
 	$(RUN) python -m indian_equity_research db-health
+
+# --------------------------------------------------------------------------
+# Prospective archiving
+# --------------------------------------------------------------------------
+PLIST_LABEL := com.indian-equity-research.archive
+PLIST_DEST  := $(HOME)/Library/LaunchAgents/$(PLIST_LABEL).plist
+PROJECT_DIR := $(shell pwd)
+UV_BIN      := $(shell command -v uv)
+
+archive:  ## Capture today's snapshot of self-overwriting sources.
+	$(RUN) python -m indian_equity_research archive
+
+archive-check:  ## Test each source's reachability without saving anything.
+	$(RUN) python -m indian_equity_research archive --check
+
+archive-install:  ## Schedule the archiver via launchd (macOS, weekdays 19:00).
+	@mkdir -p data/raw/archive "$(HOME)/Library/LaunchAgents"
+	@sed -e 's|__PROJECT_DIR__|$(PROJECT_DIR)|g' -e 's|__UV__|$(UV_BIN)|g' \
+		ops/$(PLIST_LABEL).plist.template > "$(PLIST_DEST)"
+	@launchctl unload "$(PLIST_DEST)" 2>/dev/null || true
+	@launchctl load "$(PLIST_DEST)"
+	@echo "Installed $(PLIST_DEST)"
+	@echo "Runs weekdays at 19:00; a missed run fires when the Mac next wakes."
+
+archive-uninstall:  ## Remove the scheduled archiver.
+	@launchctl unload "$(PLIST_DEST)" 2>/dev/null || true
+	@rm -f "$(PLIST_DEST)"
+	@echo "Removed $(PLIST_DEST)"
+
+archive-status:  ## Show whether the scheduled job is registered.
+	@launchctl list | grep $(PLIST_LABEL) || echo "not registered - run: make archive-install"
+	@echo "--- most recent captures ---"
+	@ls -lt data/raw/archive/*/ 2>/dev/null | head -12 || echo "  (nothing captured yet)"
+
+archive-logs:  ## Tail the scheduled archiver's output.
+	@tail -30 data/raw/archive/launchd.out 2>/dev/null || echo "  (no stdout log yet)"
+	@echo "--- errors ---"
+	@tail -30 data/raw/archive/launchd.err 2>/dev/null || echo "  (no stderr log yet)"
 
 # --------------------------------------------------------------------------
 # Housekeeping
