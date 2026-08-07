@@ -71,6 +71,10 @@ class SecretRedactingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         """Redact the record in place and always allow it through.
 
+        Only ``str`` arguments are rewritten. Coercing every argument to a
+        string would break numeric format specifiers - ``%d`` given ``"42"``
+        raises ``TypeError`` - and a number cannot carry a credential anyway.
+
         Args:
             record: The record about to be emitted.
 
@@ -80,9 +84,14 @@ class SecretRedactingFilter(logging.Filter):
         record.msg = redact_secrets(str(record.msg))
         if record.args:
             if isinstance(record.args, dict):
-                record.args = {k: redact_secrets(str(v)) for k, v in record.args.items()}
+                record.args = {
+                    k: (redact_secrets(v) if isinstance(v, str) else v)
+                    for k, v in record.args.items()
+                }
             else:
-                record.args = tuple(redact_secrets(str(a)) for a in record.args)
+                record.args = tuple(
+                    redact_secrets(a) if isinstance(a, str) else a for a in record.args
+                )
         return True
 
 

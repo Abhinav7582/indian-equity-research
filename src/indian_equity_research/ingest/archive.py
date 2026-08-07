@@ -42,6 +42,7 @@ class ArchiveOutcome:
     SAVED = "SAVED"
     ALREADY_HELD = "ALREADY_HELD"
     SKIPPED_DISABLED = "SKIPPED_DISABLED"
+    MANUAL = "MANUAL"
     FAILED = "FAILED"
     REJECTED = "REJECTED"
 
@@ -66,7 +67,12 @@ class ArchiveResult:
 
     @property
     def ok(self) -> bool:
-        """Whether the day's capture for this source is secured."""
+        """Whether the day's capture for this source is secured.
+
+        ``MANUAL`` is deliberately not "ok": the data is still uncaptured, and
+        counting it as success would hide exactly the gap this flag exists to
+        keep visible.
+        """
         return self.outcome in (ArchiveOutcome.SAVED, ArchiveOutcome.ALREADY_HELD)
 
 
@@ -117,6 +123,12 @@ class DailyArchiver:
         Returns:
             The outcome.
         """
+        if source.manual:
+            return ArchiveResult(
+                source.name,
+                ArchiveOutcome.MANUAL,
+                detail=f"download by hand from {source.manual_url}",
+            )
         if not source.enabled:
             return ArchiveResult(
                 source.name,

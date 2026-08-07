@@ -288,6 +288,9 @@ def _run_archive(settings: Settings, *, check: bool, dry_run: bool, delay: float
         print("configs/archive_sources.yaml\n")
         healthy = 0
         for source in sources:
+            if source.manual:
+                print(f"  MANUAL {source.name:22} by hand: {source.manual_url}")
+                continue
             try:
                 result = fetcher.fetch(source.url)
             except FetchError as exc:
@@ -315,10 +318,11 @@ def _run_archive(settings: Settings, *, check: bool, dry_run: bool, delay: float
 
     secured = sum(1 for r in results if r.ok)
     disabled = sum(1 for r in results if r.outcome == ArchiveOutcome.SKIPPED_DISABLED)
+    manual = sum(1 for r in results if r.outcome == ArchiveOutcome.MANUAL)
     problems = [r for r in results if r.outcome in (ArchiveOutcome.FAILED, ArchiveOutcome.REJECTED)]
 
     print()
-    print(f"  {secured} secured, {disabled} disabled, {len(problems)} problem(s)")
+    print(f"  {secured} secured, {disabled} disabled, {manual} manual, {len(problems)} problem(s)")
     if disabled == len(results):
         print()
         print("  Every source is disabled. Run `archive --check` first, then enable")

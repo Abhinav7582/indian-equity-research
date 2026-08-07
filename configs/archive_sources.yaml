@@ -1,66 +1,67 @@
 # ===========================================================================
 # Sources that OVERWRITE THEMSELVES and must be captured prospectively.
 #
-# These pages hold no history. A day not archived is gone at any price. That
-# is the entire reason this file exists and why it was built before the
-# bhavcopy ingest, which can be backfilled at leisure.
-#
-# EVERY SOURCE STARTS DISABLED. Verify one with:
-#
-#     uv run python -m indian_equity_research archive --check
-#
-# then set `enabled: true` for the ones that came back with real data. An
-# archiver that silently saves HTML error pages is worse than one that refuses
-# to start, so the archiver rejects anything that looks like a web page.
+# These pages hold no history. A day not archived is gone at any price.
 #
 # LICENSING: exchange data usage policies restrict systematic collection and
 # prohibit redistribution. This archiver makes at most one request per source
 # per day, never re-fetches, and writes only into the git-ignored data
-# directory. See docs/data_sources.md. Not legal advice - if you ever intend
-# to publish or share any of this, get a written licence first.
+# directory. See docs/data_sources.md. Not legal advice.
 #
-# URLs below are candidates. They are NOT verified and change without notice.
-# Correct them here rather than in code.
+# Verified 2026-08-07 with `archive --check`.
 # ===========================================================================
 
 sources:
-  - name: nse_asm_longterm
-    url: https://nsearchives.nseindia.com/content/equities/asm_longterm.csv
-    description: >-
-      NSE Additional Surveillance Measure, long-term list. A security entering
-      ASM can become effectively untradeable overnight. No historical archive
-      is published, so H6 can only ever be tested on data captured forward.
-    extension: csv
-    enabled: false
-
-  - name: nse_asm_shortterm
-    url: https://nsearchives.nseindia.com/content/equities/asm_shortterm.csv
-    description: NSE Additional Surveillance Measure, short-term list.
-    extension: csv
-    enabled: false
-
-  - name: nse_gsm
-    url: https://nsearchives.nseindia.com/content/equities/gsm_current.csv
-    description: >-
-      NSE Graded Surveillance Measure. Escalating stages impose 100% margin,
-      trade-to-trade settlement and eventually near-total illiquidity.
-    extension: csv
-    enabled: false
-
+  # ---------------------------------------------------------------------
+  # VERIFIED WORKING - static files on nsearchives, no session required.
+  # ---------------------------------------------------------------------
   - name: nse_equity_master
     url: https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv
     description: >-
       NSE equity instrument master: symbol, ISIN, series, listing date, face
       value. A daily snapshot is the only way to build symbol history, which
-      is what makes historical files keyed on symbol resolvable to an ISIN.
+      is what lets historical files keyed on symbol resolve to a stable ISIN.
+      Highest-value archive in this file.
     extension: csv
-    enabled: false
+    enabled: true
 
-  - name: nse_bse_ind_master
+  - name: nse_nifty100_constituents
     url: https://nsearchives.nseindia.com/content/indices/ind_nifty100list.csv
     description: >-
-      Nifty 100 constituent list as published today. Snapshotting daily builds
-      point-in-time index membership going forward, which cannot be
-      reconstructed reliably from any published historical file.
+      Nifty 100 constituents as published today. Snapshotting daily builds
+      point-in-time index membership going forward - which cannot be
+      reconstructed reliably from any published historical file, and which H1
+      and H2 both depend on.
     extension: csv
-    enabled: false
+    enabled: true
+
+  # ---------------------------------------------------------------------
+  # MANUAL - the data exists only behind a JavaScript page whose CSV comes
+  # from an /api/ endpoint requiring a session-cookie handshake. Automating
+  # that would mean defeating a bot check, which contradicts the licensing
+  # position in docs/data_sources.md. Captured by hand instead.
+  #
+  # These feed H6 (governance and surveillance exclusions). Weekly is
+  # probably enough: securities do not enter or leave ASM/GSM daily.
+  # ---------------------------------------------------------------------
+  - name: nse_asm
+    url: ""
+    manual: true
+    manual_url: https://www.nseindia.com/reports/asm
+    description: >-
+      NSE Additional Surveillance Measure, long- and short-term. A security
+      entering ASM can become effectively untradeable overnight. No historical
+      archive is published anywhere, so H6 can only ever be tested on data
+      captured forward from today.
+    extension: csv
+    enabled: true
+
+  - name: nse_gsm
+    url: ""
+    manual: true
+    manual_url: https://www.nseindia.com/reports/gsm
+    description: >-
+      NSE Graded Surveillance Measure. Escalating stages impose 100% margin,
+      trade-to-trade settlement and eventually near-total illiquidity.
+    extension: csv
+    enabled: true

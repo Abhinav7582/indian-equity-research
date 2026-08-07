@@ -160,13 +160,36 @@ class TestSourceRegistry:
 
         sources = load_sources(CONFIG_DIR / "archive_sources.yaml")
         assert len(sources) >= 4
-        assert all(s.url.startswith("https://") for s in sources)
+        # Automated sources are fetched from `url`; manual ones send a human
+        # to `manual_url`. Either way, somewhere over HTTPS.
+        assert all((s.manual_url if s.manual else s.url).startswith("https://") for s in sources)
 
-    def test_shipped_sources_are_all_disabled(self) -> None:
-        """Unverified endpoints must not run silently and save error pages."""
+    def test_every_registered_source_is_well_formed(self) -> None:
+        """Structural invariants only.
+
+        ``archive_sources.yaml`` is edited by the operator as endpoints are
+        verified, so asserting that everything is disabled would fail the
+        moment the archiver is actually put to use. What must hold regardless
+        is that every entry is complete and points somewhere over HTTPS -
+        `url` for an automated source, `manual_url` for one captured by hand.
+        """
         from indian_equity_research.constants import CONFIG_DIR
 
-        assert not any(s.enabled for s in load_sources(CONFIG_DIR / "archive_sources.yaml"))
+        for source in load_sources(CONFIG_DIR / "archive_sources.yaml"):
+            assert source.name
+            assert source.description
+            assert source.extension
+            target = source.manual_url if source.manual else source.url
+            assert target.startswith("https://"), f"{source.name} has no https target"
+
+    def test_new_sources_default_to_disabled(self, tmp_path: Path) -> None:
+        """A source added without an explicit flag must not start fetching."""
+        p = tmp_path / "s.yaml"
+        p.write_text(
+            "sources:\n  - {name: x, url: 'https://x.test/a.csv', description: d}\n",
+            encoding="utf-8",
+        )
+        assert load_sources(p)[0].enabled is False
 
     def test_missing_file(self, tmp_path: Path) -> None:
         with pytest.raises(ConfigurationError, match="not found"):

@@ -38,6 +38,12 @@ class ArchiveSource:
             until verified with ``archive --check``.
         expect_html: ``True`` only for sources that legitimately return HTML.
             Everything else is rejected if it looks like a web page.
+        manual: ``True`` when the data exists only behind a JavaScript page or
+            an endpoint requiring a session handshake. Such sources are
+            reported so they are not forgotten, but never fetched: defeating a
+            bot check would contradict the licensing position in
+            ``docs/data_sources.md``. Capture them by hand instead.
+        manual_url: Page a human should visit for a ``manual`` source.
     """
 
     name: str
@@ -46,6 +52,8 @@ class ArchiveSource:
     extension: str = "csv"
     enabled: bool = False
     expect_html: bool = False
+    manual: bool = False
+    manual_url: str = ""
 
     def filename_for(self, when: date) -> str:
         """Return the archive filename for a given capture date.
@@ -69,8 +77,9 @@ def load_sources(path: Path) -> list[ArchiveSource]:
         Every declared source, enabled or not, in file order.
 
     Raises:
-        ConfigurationError: If the file is missing, malformed, or a source is
-            missing a required field.
+        ConfigurationError: If the file is missing or malformed, a source is
+            missing a required field, names are duplicated, or a source does
+            not point somewhere over HTTPS.
     """
     if not path.is_file():
         message = f"Archive source registry not found: {path}"
@@ -104,6 +113,21 @@ def load_sources(path: Path) -> list[ArchiveSource]:
             message = f"{path.name}: duplicate source name {name!r}."
             raise ConfigurationError(message)
         seen.add(name)
+
+        # Every source must point somewhere over HTTPS: an automated source
+        # needs a fetchable `url`, a manual one needs a `manual_url` for the
+        # human. Validating here means a malformed registry fails at startup
+        # with a readable message rather than surfacing as a 404 at 18:30.
+        is_manual = bool(entry.get("manual", False))
+        target_field = "manual_url" if is_manual else "url"
+        target = str(entry.get(target_field, ""))
+        if not target.startswith("https://"):
+            how = "downloaded by hand" if is_manual else "fetched automatically"
+            message = (
+                f"{path.name}: source {name!r} is {how}, so it needs a https "
+                f"{target_field!r}, got {target!r}."
+            )
+            raise ConfigurationError(message)
         sources.append(
             ArchiveSource(
                 name=name,
@@ -112,6 +136,8 @@ def load_sources(path: Path) -> list[ArchiveSource]:
                 extension=str(entry.get("extension", "csv")),
                 enabled=bool(entry.get("enabled", False)),
                 expect_html=bool(entry.get("expect_html", False)),
+                manual=bool(entry.get("manual", False)),
+                manual_url=str(entry.get("manual_url", "")),
             )
         )
     return sources
