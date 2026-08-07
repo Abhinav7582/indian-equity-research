@@ -162,9 +162,16 @@ class TestMarketExplanation:
         report = validate_price_series(stock, market=market)
         assert report.anomalies[0].classification is AnomalyClass.UNEXPLAINED
 
-    def test_a_small_market_move_does_not_excuse_a_large_one(self) -> None:
+    def test_an_ordinary_market_day_does_not_excuse_a_large_move(self) -> None:
+        """An ordinary market day cannot excuse an idiosyncratic move.
+
+        A 1% index day is not a market event, so a 37% stock move on it must
+        stay flagged. This test originally used a 5% index day, under a magnitude-ratio rule
+        that could never fire. A 5% Nifty 100 day *is* a market event, and now
+        correctly attributes.
+        """
         stock = series("X", [100.0, 62.7])  # -37%
-        market = series("NIFTY", [1000.0, 950.0])  # -5%, far below the ratio
+        market = series("NIFTY", [1000.0, 990.0])  # -1%
         report = validate_price_series(stock, market=market)
         assert report.anomalies[0].classification is AnomalyClass.UNEXPLAINED
 
@@ -243,3 +250,44 @@ class TestInverseMarketSeries:
         cfg = ValidationConfig(market_moves_inversely=True)
         report = validate_price_series(vix, market=market, config=cfg)
         assert report.anomalies[0].classification is AnomalyClass.UNEXPLAINED
+
+
+class TestMarketExtremeDays:
+    """Regression: the magnitude-ratio rule was dead above the threshold.
+
+    Requiring the market to move 60% as far as the stock meant a 30% stock
+    move needed an 18% index day. The worst Nifty 100 day on record is 17.3%,
+    so the rule never fired once across 4.7 million real returns.
+    """
+
+    def test_a_stock_crash_on_an_extreme_market_day_is_attributed(self) -> None:
+        stock = series("X", [100.0, 70.0])  # -30%
+        market = series("NIFTY", [1000.0, 920.0])  # -8%: nowhere near 0.6 x 30%
+        report = validate_price_series(stock, market=market)
+        assert report.anomalies[0].classification is AnomalyClass.EXPLAINED_BY_MARKET
+
+    def test_a_quiet_market_day_does_not_attribute(self) -> None:
+        stock = series("X", [100.0, 70.0])
+        market = series("NIFTY", [1000.0, 990.0])  # -1%, below the extreme threshold
+        report = validate_price_series(stock, market=market)
+        assert report.anomalies[0].classification is AnomalyClass.UNEXPLAINED
+
+    def test_direction_still_matters_on_an_extreme_day(self) -> None:
+        stock = series("X", [100.0, 70.0])  # -30%
+        market = series("NIFTY", [1000.0, 1080.0])  # +8%, opposite way
+        report = validate_price_series(stock, market=market)
+        assert report.anomalies[0].classification is AnomalyClass.UNEXPLAINED
+
+    def test_the_threshold_is_configurable(self) -> None:
+        stock = series("X", [100.0, 70.0])
+        market = series("NIFTY", [1000.0, 970.0])  # -3%
+        strict = ValidationConfig(market_extreme_threshold=0.05)
+        loose = ValidationConfig(market_extreme_threshold=0.02)
+        assert (
+            validate_price_series(stock, market=market, config=strict).anomalies[0].classification
+            is AnomalyClass.UNEXPLAINED
+        )
+        assert (
+            validate_price_series(stock, market=market, config=loose).anomalies[0].classification
+            is AnomalyClass.EXPLAINED_BY_MARKET
+        )

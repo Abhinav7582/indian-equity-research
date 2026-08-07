@@ -19,9 +19,11 @@ from indian_equity_research.market.bhavcopy import (
     UDIFF_EFFECTIVE_FROM,
     BhavcopyError,
     BhavFormat,
+    BhavRecord,
     detect_format,
     parse_bhavcopy,
     read_bhavcopy_file,
+    series_by_isin,
     series_for_isin,
 )
 
@@ -241,3 +243,70 @@ class TestEmptyAndMalformed:
         rows = LEGACY_ROWS.replace("2900.00,2950.00", "abc,2950.00")
         with pytest.raises(BhavcopyError, match="OPEN"):
             parse_bhavcopy(LEGACY_HEADER + rows)
+
+
+class TestSeriesByIsin:
+    """Single-pass series construction.
+
+    Regression: the CLI originally called ``series_for_isin`` once per
+    security, which rescans every record each time. On eleven years of Indian
+    equities that is ~3.9 million rows times ~3,000 securities and the loop
+    never finishes.
+    """
+
+    def _two_days(self) -> list[BhavRecord]:
+        day1 = parse_bhavcopy(LEGACY_HEADER + LEGACY_ROWS)
+        day2 = parse_bhavcopy(LEGACY_HEADER + LEGACY_ROWS.replace("05-JUL-2024", "08-JUL-2024"))
+        return day1 + day2
+
+    def test_builds_every_series_in_one_pass(self) -> None:
+        series, problems = series_by_isin(self._two_days())
+        assert set(series) == {"INE002A01018", "INE467B01029"}
+        assert problems == []
+
+    def test_matches_the_single_security_builder(self) -> None:
+        records = self._two_days()
+        bulk, _ = series_by_isin(records)
+        one = series_for_isin(records, "INE002A01018")
+        assert bulk["INE002A01018"].dates == one.dates
+        assert bulk["INE002A01018"].closes == one.closes
+
+    def test_omits_securities_with_too_few_observations(self) -> None:
+        series, _ = series_by_isin(parse_bhavcopy(LEGACY_HEADER + LEGACY_ROWS))
+        assert series == {}
+
+    def test_conflicting_closes_are_reported_not_raised(self) -> None:
+        """One bad security must not abort the whole load."""
+        rows = LEGACY_ROWS + (
+            "RELIANCE,BE,2900.00,2950.00,2880.00,9999.00,2941.00,2895.00,"
+            "10,1000.00,05-JUL-2024,2,INE002A01018,\n"
+        )
+        records = parse_bhavcopy(LEGACY_HEADER + rows) + parse_bhavcopy(
+            LEGACY_HEADER + LEGACY_ROWS.replace("05-JUL-2024", "08-JUL-2024")
+        )
+        series, problems = series_by_isin(records)
+        assert "INE002A01018" not in series
+        assert any("two different closes" in p for p in problems)
+        assert "INE467B01029" in series  # the healthy one survives
+
+
+class TestDateFormatVariants:
+    """NSE has not been consistent about the date format in legacy files."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("05-JUL-2024", date(2024, 7, 5)),
+            ("13-Jul-20", date(2020, 7, 13)),
+            ("2024-07-05", date(2024, 7, 5)),
+        ],
+    )
+    def test_accepts_known_variants(self, raw: str, expected: date) -> None:
+        rows = LEGACY_ROWS.replace("05-JUL-2024", raw)
+        assert parse_bhavcopy(LEGACY_HEADER + rows)[0].trade_date == expected
+
+    def test_two_digit_year_regression(self) -> None:
+        """The 2020-07-13 file used '13-Jul-20' and failed the whole load."""
+        rows = LEGACY_ROWS.replace("05-JUL-2024", "13-Jul-20")
+        records = parse_bhavcopy(LEGACY_HEADER + rows)
+        assert records[0].trade_date == date(2020, 7, 13)

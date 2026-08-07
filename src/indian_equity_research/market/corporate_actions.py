@@ -110,8 +110,14 @@ class ValidationConfig:
     Attributes:
         outlier_threshold: Absolute daily return above which a move is
             examined. 0.25 is the figure fixed in ``data_principles.md``.
-        market_explains_ratio: A move is attributed to the market when the
-            market moved at least this fraction of it, in the same direction.
+        market_extreme_threshold: A market move of at least this size makes a
+            large single-stock move in the same direction unremarkable. This
+            replaced a magnitude-ratio rule that was provably dead: requiring
+            the market to move 60% as far as the stock meant a 30% stock move
+            needed an 18% index day, and the worst Nifty 100 day on record is
+            17.3%. The rule never fired once in 4.7 million returns.
+        market_explains_ratio: Secondary path, for moves close to the outlier
+            threshold where the ratio test can still succeed.
         action_window_days: Calendar days either side of an ex-date that count
             as matching, allowing for the ex-date falling on a non-session.
         ratio_tolerance: Relative tolerance when matching a plausible action
@@ -125,6 +131,7 @@ class ValidationConfig:
     """
 
     outlier_threshold: float = 0.25
+    market_extreme_threshold: float = 0.04
     market_explains_ratio: float = 0.60
     action_window_days: int = 3
     ratio_tolerance: float = 0.03
@@ -317,14 +324,18 @@ def validate_price_series(
             aligned = (
                 market_move * daily < 0 if cfg.market_moves_inversely else market_move * daily > 0
             )
-            # An inverse series need not match the market's magnitude: a 6%
-            # index fall routinely produces a 60% volatility spike. Only the
-            # direction is required.
-            big_enough = (
-                True
-                if cfg.market_moves_inversely
-                else abs(market_move) >= abs(daily) * cfg.market_explains_ratio
-            )
+            if cfg.market_moves_inversely:
+                # An inverse series need not match the market's magnitude: a 6%
+                # index fall routinely produces a 60% volatility spike.
+                big_enough = True
+            else:
+                # Either the market itself had an extreme day - in which case a
+                # large single-stock move is unremarkable - or, for moves near
+                # the outlier threshold, the market moved comparably.
+                big_enough = (
+                    abs(market_move) >= cfg.market_extreme_threshold
+                    or abs(market_move) >= abs(daily) * cfg.market_explains_ratio
+                )
             if aligned and big_enough:
                 report.anomalies.append(
                     ReturnAnomaly(

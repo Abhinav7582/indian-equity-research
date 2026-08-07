@@ -437,7 +437,7 @@ def _run_bhavcopy(settings: Settings, args: argparse.Namespace) -> int:
     from indian_equity_research.market.bhavcopy import (
         BhavcopyError,
         load_bhavcopy_directory,
-        series_for_isin,
+        series_by_isin,
     )
     from indian_equity_research.market.corporate_actions import validate_price_series
 
@@ -480,35 +480,66 @@ def _run_bhavcopy(settings: Settings, args: argparse.Namespace) -> int:
         if not records:
             return EXIT_FAILURE
 
-        isins = sorted({r.isin for r in records})
-        blocked = 0
-        checked = 0
-        for isin in isins:
-            try:
-                series = series_for_isin(records, isin)
-            except BhavcopyError as exc:
-                print(f"      {isin}: {exc}")
-                blocked += 1
-                continue
-            if len(series) < 2:
-                continue
-            checked += 1
-            validation = validate_price_series(series, isin=isin)
+        all_series, problems = series_by_isin(records)
+        for problem in problems[:5]:
+            print(f"      {problem}")
+
+        # Without a market series every crash day is reported as unexplained.
+        market = None
+        try:
+            from indian_equity_research.data.csv_series import load_price_series_glob
+
+            market = load_price_series_glob(
+                settings.raw_dir / "indices", "nifty100_pr*.csv", "Nifty 100 PR"
+            )
+            print("  Attributing market-wide moves using Nifty 100 PR.")
+        except Exception:  # noqa: BLE001 - the market series is an aid, not a requirement
+            print("  No index series available; crash days will read as UNEXPLAINED.")
+
+        # ISINs are unreadable in a report; resolve them where possible.
+        symbol_of: dict[str, str] = {}
+        try:
+            from indian_equity_research.market.instruments import (
+                SymbolHistory,
+                load_snapshots,
+            )
+
+            history = SymbolHistory.from_snapshots(load_snapshots(settings.raw_dir / "archive"))
+            symbol_of = {span.isin: span.symbol for span in history.spans}
+        except Exception:  # noqa: BLE001 - names are cosmetic
+            pass
+
+        tally: dict[str, int] = {}
+        blocked_isins: list[tuple[str, int]] = []
+        for isin, series in all_series.items():
+            validation = validate_price_series(series, isin=isin, market=market)
+            for name, count in validation.count_by_class().items():
+                tally[name] = tally.get(name, 0) + count
             if not validation.passed:
-                blocked += 1
-                if blocked <= 10:
-                    print(f"      {validation.summary()}")
-                    for anomaly in validation.blocking[:2]:
-                        print(
-                            f"          {anomaly.when} {anomaly.daily_return:+.1%} "
-                            f"{anomaly.classification.value}"
-                        )
+                blocked_isins.append((isin, len(validation.blocking)))
+
         print()
-        print(f"  {checked:,} securities validated, {blocked:,} blocked.")
-        if blocked:
-            print("  Unexplained moves must be resolved before this data is used.")
-            print("  Most will be corporate actions that have not been applied yet.")
-        return EXIT_FAILURE if blocked else EXIT_OK
+        print(
+            f"  {len(all_series):,} securities validated, "
+            f"{len(blocked_isins):,} blocked, {len(problems):,} unusable."
+        )
+        print()
+        print("  Large moves by classification:")
+        for name, count in sorted(tally.items(), key=lambda kv: -kv[1]):
+            print(f"      {name:32} {count:>8,}")
+
+        if blocked_isins:
+            worst = sorted(blocked_isins, key=lambda kv: -kv[1])[:10]
+            print()
+            print("  Most-affected securities:")
+            for isin, count in worst:
+                name = symbol_of.get(isin, "?")
+                print(f"      {isin}  {name:<14} {count:,} unresolved move(s)")
+            print()
+            print("  These are the specification for the adjustment engine.")
+            print("  SUSPECTED_UNADJUSTED_ACTION entries are corporate actions not yet")
+            print("  applied; UNEXPLAINED entries need investigating individually.")
+        return EXIT_FAILURE if blocked_isins else EXIT_OK
 
     if not args.date_from or not args.date_to:
         print("Specify --from and --to (YYYY-MM-DD), or use --check / --validate.")
@@ -545,11 +576,11 @@ def _run_bhavcopy(settings: Settings, args: argparse.Namespace) -> int:
     destination.mkdir(parents=True, exist_ok=True)
     fetcher = BhavcopyFetcher(destination, UrlFetcher(delay_seconds=config.effective_delay), config)
     results = fetcher.fetch_range(plan, limit=args.limit)
-    tally: dict[str, int] = {}
+    outcome_counts: dict[str, int] = {}
     for outcome in (r.outcome for r in results):
-        tally[outcome] = tally.get(outcome, 0) + 1
+        outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
     print()
-    for name, count in sorted(tally.items()):
+    for name, count in sorted(outcome_counts.items()):
         print(f"  {name:16} {count:,}")
     failures = [r for r in results if r.outcome in (FetchOutcome.FAILED, FetchOutcome.REJECTED)]
     for failure in failures[:5]:

@@ -43,6 +43,7 @@ __all__ = [
     "load_bhavcopy_directory",
     "parse_bhavcopy",
     "read_bhavcopy_file",
+    "series_by_isin",
     "series_for_isin",
 ]
 
@@ -166,7 +167,9 @@ def _parse_date(value: str | None, *, line: int) -> date:
         BhavcopyError: If no known layout matches.
     """
     text = _clean(value)
-    for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+    # NSE has published a two-digit year on at least one day (13-Jul-20 in
+    # the 2020-07-13 legacy file), so %y must be tried as well.
+    for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d-%b-%y", "%d-%B-%Y"):
         try:
             return datetime.strptime(text, fmt).date()  # noqa: DTZ007 - calendar date
         except ValueError:
@@ -461,3 +464,49 @@ def load_bhavcopy_directory(
         failures=tuple(failures),
     )
     return records, report
+
+
+def series_by_isin(
+    records: list[BhavRecord], *, min_observations: int = 2
+) -> tuple[dict[str, PriceSeries], list[str]]:
+    """Build a close-price series for every security in one pass.
+
+    :func:`series_for_isin` scans the whole record list for each security it is
+    asked about. Called once that is fine; called for every security it is
+    quadratic - on eleven years of Indian equities that is roughly 3.9 million
+    rows times 3,000 securities, and the loop never finishes. This groups the
+    records once instead.
+
+    Args:
+        records: Records spanning any number of sessions.
+        min_observations: Securities with fewer closes than this are omitted;
+            a one-day series supports no return at all.
+
+    Returns:
+        A mapping of ISIN to price series, and a list of problems for
+        securities that could not be assembled - typically two series rows
+        publishing different closes for one date.
+    """
+    grouped: dict[str, dict[date, float]] = {}
+    problems: list[str] = []
+    conflicted: set[str] = set()
+
+    for record in records:
+        by_date = grouped.setdefault(record.isin, {})
+        previous = by_date.get(record.trade_date)
+        if previous is not None and previous != record.close:
+            if record.isin not in conflicted:
+                conflicted.add(record.isin)
+                problems.append(
+                    f"{record.isin}: two different closes on {record.trade_date} "
+                    f"({previous} and {record.close}); two series rows were not filtered."
+                )
+            continue
+        by_date[record.trade_date] = record.close
+
+    series: dict[str, PriceSeries] = {}
+    for isin, by_date in grouped.items():
+        if isin in conflicted or len(by_date) < min_observations:
+            continue
+        series[isin] = PriceSeries.from_mapping(isin, by_date)
+    return series, problems
