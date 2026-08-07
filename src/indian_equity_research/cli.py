@@ -532,9 +532,28 @@ def _run_bhavcopy(settings: Settings, args: argparse.Namespace) -> int:
             worst = sorted(blocked_isins, key=lambda kv: -kv[1])[:10]
             print()
             print("  Most-affected securities:")
+            delisted = 0
             for isin, count in worst:
-                name = symbol_of.get(isin, "?")
-                print(f"      {isin}  {name:<14} {count:,} unresolved move(s)")
+                ticker = symbol_of.get(isin)
+                if ticker is None:
+                    delisted += 1
+                    label = "<delisted>"
+                else:
+                    label = ticker
+                print(f"      {isin}  {label:<14} {count:,} unresolved move(s)")
+            if delisted:
+                print()
+                print(
+                    f"      {delisted} of these are no longer listed. Securities that "
+                    f"collapsed or were"
+                )
+                print(
+                    "      delisted dominate the violent-move list, which is exactly why they are"
+                )
+                print(
+                    "      retained: a universe built from today's listings would hide "
+                    "them entirely."
+                )
             print()
             print("  These are the specification for the adjustment engine.")
             print("  SUSPECTED_UNADJUSTED_ACTION entries are corporate actions not yet")
