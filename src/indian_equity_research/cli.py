@@ -53,6 +53,7 @@ COMMANDS: Final[tuple[str, ...]] = (
     "h4-regime",
     "archive",
     "reference",
+    "bhavcopy",
 )
 
 _PROGRAM = "indian-equity-research"
@@ -79,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
         "h4-regime": "Score the H4 regime overlay against the Amendment A2 criteria.",
         "archive": "Snapshot sources that overwrite themselves. Read-only, one request per day.",
         "reference": "Report the trading calendar and instrument master built from local data.",
+        "bhavcopy": "Plan, fetch or validate historical NSE bhavcopy files.",
     }
     created = {
         command: subparsers.add_parser(command, help=help_by_command[command])
@@ -106,6 +108,35 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=3.0,
         help="Minimum seconds between requests (default: 3).",
+    )
+    bhav = created["bhavcopy"]
+    bhav.add_argument(
+        "--from", dest="date_from", type=str, default=None, help="First session date, YYYY-MM-DD."
+    )
+    bhav.add_argument(
+        "--to", dest="date_to", type=str, default=None, help="Last session date, YYYY-MM-DD."
+    )
+    bhav.add_argument(
+        "--check", action="store_true", help="Test one URL of each format without saving anything."
+    )
+    bhav.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Actually download. Without this, only a plan is printed.",
+    )
+    bhav.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Stop after N downloads. Use for a cautious first run.",
+    )
+    bhav.add_argument(
+        "--delay", type=float, default=2.0, help="Minimum seconds between requests (floor: 1)."
+    )
+    bhav.add_argument(
+        "--validate",
+        action="store_true",
+        help="Parse the local files and run the corporate-action validator.",
     )
     return parser
 
@@ -392,6 +423,140 @@ def _run_reference(settings: Settings) -> int:
     return EXIT_FAILURE
 
 
+def _run_bhavcopy(settings: Settings, args: argparse.Namespace) -> int:
+    """Plan, fetch or validate historical bhavcopy files."""
+    from datetime import date as _date
+
+    from indian_equity_research.ingest.bhavcopy_fetch import (
+        BhavcopyFetchConfig,
+        BhavcopyFetcher,
+        FetchOutcome,
+        plan_downloads,
+    )
+    from indian_equity_research.ingest.fetcher import FetchError, UrlFetcher
+    from indian_equity_research.market.bhavcopy import (
+        BhavcopyError,
+        load_bhavcopy_directory,
+        series_for_isin,
+    )
+    from indian_equity_research.market.corporate_actions import validate_price_series
+
+    destination = settings.raw_dir / "bhavcopy"
+    config = BhavcopyFetchConfig(delay_seconds=args.delay, enabled=bool(args.fetch))
+
+    if args.check:
+        print("BHAVCOPY URL CHECK - nothing is saved")
+        print("=" * 72)
+        probe = UrlFetcher(delay_seconds=config.effective_delay)
+        healthy = 0
+        for when, label in ((_date(2024, 7, 5), "LEGACY"), (_date(2024, 7, 8), "UDIFF")):
+            url = config.url_for(when)
+            try:
+                result = probe.fetch(url)
+            except FetchError as exc:
+                print(f"  FAIL  {label:7} {exc}")
+                continue
+            if result.looks_like_html():
+                print(f"  HTML  {label:7} returned a web page, not a zip - URL moved?")
+                continue
+            healthy += 1
+            print(f"  OK    {label:7} {len(result.content):>9,} bytes  {url}")
+        print(f"\n  {healthy}/2 URL templates returned usable data.")
+        if healthy < 2:
+            print("  Correct the templates in BhavcopyFetchConfig before fetching.")
+        return EXIT_OK if healthy == 2 else EXIT_FAILURE
+
+    if args.validate:
+        try:
+            records, report = load_bhavcopy_directory(destination)
+        except BhavcopyError as exc:
+            print(f"Could not load bhavcopy files: {exc}")
+            return EXIT_FAILURE
+        print("BHAVCOPY VALIDATION")
+        print("=" * 72)
+        print(f"  {report.summary()}")
+        for name, reason in report.failures[:10]:
+            print(f"      FAILED {name}: {reason}")
+        if not records:
+            return EXIT_FAILURE
+
+        isins = sorted({r.isin for r in records})
+        blocked = 0
+        checked = 0
+        for isin in isins:
+            try:
+                series = series_for_isin(records, isin)
+            except BhavcopyError as exc:
+                print(f"      {isin}: {exc}")
+                blocked += 1
+                continue
+            if len(series) < 2:
+                continue
+            checked += 1
+            validation = validate_price_series(series, isin=isin)
+            if not validation.passed:
+                blocked += 1
+                if blocked <= 10:
+                    print(f"      {validation.summary()}")
+                    for anomaly in validation.blocking[:2]:
+                        print(
+                            f"          {anomaly.when} {anomaly.daily_return:+.1%} "
+                            f"{anomaly.classification.value}"
+                        )
+        print()
+        print(f"  {checked:,} securities validated, {blocked:,} blocked.")
+        if blocked:
+            print("  Unexplained moves must be resolved before this data is used.")
+            print("  Most will be corporate actions that have not been applied yet.")
+        return EXIT_FAILURE if blocked else EXIT_OK
+
+    if not args.date_from or not args.date_to:
+        print("Specify --from and --to (YYYY-MM-DD), or use --check / --validate.")
+        return EXIT_FAILURE
+    try:
+        start = _date.fromisoformat(args.date_from)
+        end = _date.fromisoformat(args.date_to)
+    except ValueError as exc:
+        print(f"Invalid date: {exc}")
+        return EXIT_FAILURE
+
+    sessions: set[_date] | None = None
+    try:
+        from indian_equity_research.market.reference import calendar_from_index_series
+
+        calendar, source = calendar_from_index_series(settings.raw_dir / "indices")
+        sessions = set(calendar.sessions)
+        print(f"Using observed sessions from {source} to skip non-trading days.\n")
+    except Exception:  # noqa: BLE001 - the calendar is an optimisation, not a requirement
+        print("No trading calendar available; every weekday will be requested.\n")
+
+    plan = plan_downloads(start, end, destination, config, sessions)
+    print("BHAVCOPY " + ("FETCH" if args.fetch else "PLAN (dry run)"))
+    print("=" * 72)
+    print(f"  {plan.describe()}")
+    print(f"  destination  {destination}")
+
+    if not args.fetch:
+        print()
+        print("  Nothing downloaded. Re-run with --fetch to proceed.")
+        print("  Verify the URLs first with: bhavcopy --check")
+        return EXIT_OK
+
+    destination.mkdir(parents=True, exist_ok=True)
+    fetcher = BhavcopyFetcher(destination, UrlFetcher(delay_seconds=config.effective_delay), config)
+    results = fetcher.fetch_range(plan, limit=args.limit)
+    tally: dict[str, int] = {}
+    for outcome in (r.outcome for r in results):
+        tally[outcome] = tally.get(outcome, 0) + 1
+    print()
+    for name, count in sorted(tally.items()):
+        print(f"  {name:16} {count:,}")
+    failures = [r for r in results if r.outcome in (FetchOutcome.FAILED, FetchOutcome.REJECTED)]
+    for failure in failures[:5]:
+        print(f"      {failure.when} {failure.detail}")
+    return EXIT_FAILURE if failures else EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point for the command-line interface.
 
@@ -426,6 +591,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_archive(settings, check=args.check, dry_run=args.dry_run, delay=args.delay)
     if args.command == "reference":
         return _run_reference(settings)
+    if args.command == "bhavcopy":
+        return _run_bhavcopy(settings, args)
 
     # argparse enforces `required=True`, so this is defensive only.
     print(f"Unknown command: {args.command}")

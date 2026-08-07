@@ -47,6 +47,7 @@ class TestParser:
             "h4-regime",
             "archive",
             "reference",
+            "bhavcopy",
         }
 
     def test_every_declared_command_is_registered(self) -> None:
@@ -86,6 +87,17 @@ class TestParser:
             text = module.read_text(encoding="utf-8").lower()
             for name in forbidden:
                 assert name not in text, f"{module.name} references {name}"
+
+    def test_bhavcopy_defaults_to_a_dry_run(self) -> None:
+        """Downloading must be an explicit choice, never the default."""
+        args = build_parser().parse_args(["bhavcopy", "--from", "2024-01-01", "--to", "2024-01-31"])
+        assert args.fetch is False
+
+    def test_bhavcopy_flags(self) -> None:
+        args = build_parser().parse_args(["bhavcopy", "--check", "--delay", "5", "--limit", "10"])
+        assert args.check is True
+        assert args.delay == 5.0
+        assert args.limit == 10
 
     def test_archive_command_flags(self) -> None:
         args = build_parser().parse_args(["archive", "--check", "--delay", "5"])
