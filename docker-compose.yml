@@ -32,5 +32,14 @@ services:
       start_period: 10s
 
 volumes:
+  # Deliberately NOT given an explicit `name:`. A fixed volume name is shared
+  # across every Compose project on the machine, so a second checkout of this
+  # repo (for example a clean-clone verification in /tmp) would silently mount
+  # the working copy's database and warn:
+  #
+  #   volume "ier_postgres_data" already exists but was created for project
+  #   "research-indianequityalgo-tradingsystem" (expected "verify-ier")
+  #
+  # Letting Compose namespace it per project keeps checkouts isolated, which
+  # matters because integration tests assert the schema is empty.
   postgres_data:
-    name: ier_postgres_data
