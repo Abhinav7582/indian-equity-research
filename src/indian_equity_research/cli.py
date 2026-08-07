@@ -52,6 +52,7 @@ COMMANDS: Final[tuple[str, ...]] = (
     "db-health",
     "h4-regime",
     "archive",
+    "reference",
 )
 
 _PROGRAM = "indian-equity-research"
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
         "db-health": "Check PostgreSQL connectivity. Exits non-zero when unavailable.",
         "h4-regime": "Score the H4 regime overlay against the Amendment A2 criteria.",
         "archive": "Snapshot sources that overwrite themselves. Read-only, one request per day.",
+        "reference": "Report the trading calendar and instrument master built from local data.",
     }
     created = {
         command: subparsers.add_parser(command, help=help_by_command[command])
@@ -332,6 +334,64 @@ def _run_archive(settings: Settings, *, check: bool, dry_run: bool, delay: float
     return EXIT_FAILURE if problems else EXIT_OK
 
 
+def _run_reference(settings: Settings) -> int:
+    """Report what reference data exists, and what is missing."""
+    from indian_equity_research.market.reference import build_reference
+
+    ref = build_reference(settings.raw_dir)
+
+    print("REFERENCE DATA")
+    print("=" * 72)
+
+    print("\nTrading calendar")
+    if ref.calendar is None:
+        print(f"  MISSING - {ref.calendar_problem}")
+    else:
+        cal = ref.calendar
+        holidays = cal.missing_weekdays()
+        span_years = (cal.last - cal.first).days / 365.25
+        print(f"  source          {ref.calendar_source}")
+        print(f"  sessions        {len(cal):,}")
+        print(f"  range           {cal.first} .. {cal.last}  ({span_years:.1f} years)")
+        print(f"  sessions/year   {len(cal) / span_years:.0f}")
+        print(f"  weekday closures {len(holidays):,}  (exchange holidays)")
+        if holidays:
+            recent = [d.isoformat() for d in holidays[-5:]]
+            print(f"  most recent     {', '.join(recent)}")
+
+    print("\nInstrument master")
+    if ref.symbols is None or ref.latest_snapshot is None:
+        print(f"  MISSING - {ref.instrument_problem}")
+    else:
+        snap = ref.latest_snapshot
+        hist = ref.symbols
+        normal = sum(1 for r in snap.records.values() if r.is_normal_series)
+        t2t = sum(1 for r in snap.records.values() if r.is_trade_to_trade)
+        reused = hist.symbols_with_multiple_isins()
+        renamed = hist.isins_with_multiple_symbols()
+        days = (hist.observed_to - hist.observed_from).days
+        print(f"  latest snapshot {snap.as_of}   securities {len(snap):,}")
+        print(f"  EQ (tradeable)  {normal:,}")
+        print(f"  BE/BZ (T2T)     {t2t:,}  - excluded by the universe rules")
+        print(f"  observed window {hist.observed_from} .. {hist.observed_to}  ({days} days)")
+        print(f"  reused symbols  {len(reused)}")
+        print(f"  renamed ISINs   {len(renamed)}")
+        for symbol, isins in list(reused.items())[:5]:
+            print(f"      {symbol} -> {isins}")
+        if days == 0:
+            print()
+            print("  Only one snapshot held, so symbol history has no depth yet.")
+            print("  Resolutions for past dates will be ASSUMED_STABLE, not OBSERVED.")
+            print("  This improves only by archiving daily - schedule it: make archive-install")
+
+    print()
+    if ref.is_complete:
+        print("Both pieces available.")
+        return EXIT_OK
+    print("Reference data is incomplete. Phase 2c/2d depend on it.")
+    return EXIT_FAILURE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point for the command-line interface.
 
@@ -364,6 +424,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_h4(directory)
     if args.command == "archive":
         return _run_archive(settings, check=args.check, dry_run=args.dry_run, delay=args.delay)
+    if args.command == "reference":
+        return _run_reference(settings)
 
     # argparse enforces `required=True`, so this is defensive only.
     print(f"Unknown command: {args.command}")

@@ -28,10 +28,11 @@ class TestParser:
         the help text deliberately contains the words "place orders" in its
         safety notice.
 
-        The set has grown twice: `h4-regime` in Phase 1.5 (reads local CSVs,
-        opens no socket) and `archive` in Phase 2a (fetches published exchange
-        files, one request per source per day, and writes only into the
-        git-ignored data directory).
+        The set has grown three times: `h4-regime` in Phase 1.5 (reads local
+        CSVs, opens no socket), `archive` in Phase 2a (fetches published
+        exchange files, one request per source per day, writing only into the
+        git-ignored data directory), and `reference` in Phase 2b (reads local
+        data and prints a report).
 
         Neither can place an order. The invariant this guards is **no broker
         connectivity and no order placement**, not "never add a command" -
@@ -45,6 +46,7 @@ class TestParser:
             "db-health",
             "h4-regime",
             "archive",
+            "reference",
         }
 
     def test_every_declared_command_is_registered(self) -> None:
