@@ -39,8 +39,11 @@ from indian_equity_research.market.corporate_actions import (
     ValidationReport,
 )
 from indian_equity_research.market.delisting import (
+    ClassificationConfig,
+    DelistingOutcome,
     DelistingRecord,
     TerminalReturnPolicy,
+    classify_delisting,
 )
 from indian_equity_research.research.series import PriceSeries
 
@@ -200,13 +203,18 @@ def apply_adjustments(
     )
 
 
-def terminal_return(record: DelistingRecord, policy: TerminalReturnPolicy) -> float | None:
+def terminal_return(
+    record: DelistingRecord,
+    policy: TerminalReturnPolicy,
+    classification: ClassificationConfig | None = None,
+) -> float | None:
     """Return the assumed terminal value per share on delisting.
 
     Args:
         record: The delisting record, whose last close is the only price
             evidence available.
         policy: Which assumption to apply.
+        classification: Thresholds used when ``policy`` is ``CLASSIFIED``.
 
     Returns:
         The last observed close under ``LAST_PRICE``, ``0.0`` under
@@ -218,75 +226,119 @@ def terminal_return(record: DelistingRecord, policy: TerminalReturnPolicy) -> fl
         return record.last_close
     if policy is TerminalReturnPolicy.TOTAL_LOSS:
         return 0.0
+    if policy is TerminalReturnPolicy.CLASSIFIED:
+        outcome = classify_delisting(record, classification)
+        if outcome is DelistingOutcome.LIKELY_ACQUISITION:
+            return record.last_close
+        if outcome is DelistingOutcome.LIKELY_COLLAPSE:
+            return 0.0
+        return None
     return None
 
 
 @dataclass(frozen=True, slots=True)
 class TerminalSensitivity:
-    """How much the delisting assumption moves a result.
+    """How much the delisting assumption could move a result.
+
+    Two bands are reported and both matter:
+
+    * the **outer bound**, from assuming every delisting recovered its last
+      close down to assuming none did. This is the honest full range and it is
+      never discarded;
+    * the **classified band**, which resolves the confidently-readable tails
+      and leaves only the uncertain middle floating.
+
+    If a conclusion holds across the outer bound, the delisting assumption is
+    not load-bearing and can be ignored. If it holds only inside the
+    classified band, it depends on the classification being right - which is
+    an inference from price data, not a fact.
 
     Attributes:
-        securities: Delisted securities considered.
-        value_at_last_price: Total terminal value assuming the last close was
-            realised.
-        value_at_total_loss: Total terminal value assuming nothing was
-            recovered, which is zero by construction.
-        already_collapsed: Securities whose last close was below
-            ``collapse_threshold`` of their first observed close.
-        collapse_threshold: Fraction used for the above.
+        securities: Delistings considered.
+        likely_acquisition: Read as acquisitions.
+        likely_collapse: Read as collapses.
+        uncertain: Not separable from prices.
+        value_at_last_price: Total last-close value across all delistings.
+        value_uncertain: Last-close value of the uncertain middle alone.
+        collapse_threshold: Threshold used for the collapse test.
     """
 
     securities: int
+    likely_acquisition: int
+    likely_collapse: int
+    uncertain: int
     value_at_last_price: float
-    value_at_total_loss: float
-    already_collapsed: int
+    value_uncertain: float
     collapse_threshold: float
 
     @property
-    def spread(self) -> float:
-        """Absolute difference between the two assumptions."""
-        return self.value_at_last_price - self.value_at_total_loss
+    def value_at_total_loss(self) -> float:
+        """Terminal value assuming nothing was recovered. Zero by definition."""
+        return 0.0
 
     @property
-    def collapsed_fraction(self) -> float:
-        """Share of delistings that were already near-worthless."""
-        return self.already_collapsed / self.securities if self.securities else 0.0
+    def outer_band(self) -> float:
+        """Width of the unavoidable uncertainty, before classification."""
+        return self.value_at_last_price
+
+    @property
+    def classified_band(self) -> float:
+        """Width remaining once the confident tails are resolved."""
+        return self.value_uncertain
+
+    @property
+    def band_narrowing(self) -> float:
+        """Fraction of the uncertainty the classification removes."""
+        if self.value_at_last_price <= 0:
+            return 0.0
+        return 1.0 - (self.value_uncertain / self.value_at_last_price)
+
+    @property
+    def uncertain_fraction(self) -> float:
+        """Share of delistings that remain unclassifiable."""
+        return self.uncertain / self.securities if self.securities else 0.0
 
     def summary(self) -> str:
-        """Return a one-line description of the sensitivity."""
+        """Return a two-line description of the sensitivity."""
         return (
-            f"{self.securities:,} delistings; "
-            f"{self.collapsed_fraction:.0%} had already fallen below "
-            f"{self.collapse_threshold:.0%} of their first observed price. "
-            f"LAST_PRICE recovers {self.value_at_last_price:,.0f} vs 0 under TOTAL_LOSS."
+            f"{self.securities:,} delistings: {self.likely_acquisition:,} likely "
+            f"acquisitions, {self.likely_collapse:,} likely collapses, "
+            f"{self.uncertain:,} uncertain ({self.uncertain_fraction:.0%}).\n"
+            f"  Uncertainty band {self.outer_band:,.0f} -> {self.classified_band:,.0f} "
+            f"after classification ({self.band_narrowing:.0%} narrower)."
         )
 
 
 def terminal_sensitivity(
-    records: Iterable[DelistingRecord], *, collapse_threshold: float = 0.10
+    records: Iterable[DelistingRecord],
+    *,
+    classification: ClassificationConfig | None = None,
 ) -> TerminalSensitivity:
     """Measure how much the delisting assumption could matter.
 
-    The suspicion worth testing: most delistings are preceded by collapse, so
-    the last close is already near zero and the two policies barely differ. If
-    that holds, the choice is empirically unimportant. If it does not, the
-    delisted tail is doing real work in any result that includes it.
-
     Args:
         records: Delisting records.
-        collapse_threshold: Fraction of the first observed price below which a
-            security counts as already collapsed.
+        classification: Thresholds for the three-way read.
 
     Returns:
-        The measured sensitivity.
+        The measured sensitivity, with both the outer bound and the narrowed
+        band.
     """
+    cfg = classification or ClassificationConfig()
     entries = list(records)
-    total_last = sum(r.last_close for r in entries)
-    collapsed = sum(1 for r in entries if r.decline_from_first <= collapse_threshold)
+    counts = dict.fromkeys(DelistingOutcome, 0)
+    uncertain_value = 0.0
+    for record in entries:
+        outcome = classify_delisting(record, cfg)
+        counts[outcome] += 1
+        if outcome is DelistingOutcome.UNCERTAIN:
+            uncertain_value += record.last_close
     return TerminalSensitivity(
         securities=len(entries),
-        value_at_last_price=total_last,
-        value_at_total_loss=0.0,
-        already_collapsed=collapsed,
-        collapse_threshold=collapse_threshold,
+        likely_acquisition=counts[DelistingOutcome.LIKELY_ACQUISITION],
+        likely_collapse=counts[DelistingOutcome.LIKELY_COLLAPSE],
+        uncertain=counts[DelistingOutcome.UNCERTAIN],
+        value_at_last_price=sum(r.last_close for r in entries),
+        value_uncertain=uncertain_value,
+        collapse_threshold=cfg.collapse_peak_threshold,
     )

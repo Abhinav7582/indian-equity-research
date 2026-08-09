@@ -559,6 +559,92 @@ Phase 1.5. No stock-level data, no corporate actions, no index membership
 reconstruction, no survivorship-bias handling — index series only. Estimated
 effort ~2 RU, against ~21 RU for the full pipeline needed to test H1 and H2.
 
+---
+
+# AMENDMENT A4 — Delisting treatment declared
+
+**Date: 2026-08-07**
+**Declared after observing the distribution of delisting outcomes, before any
+strategy has been backtested on stock-level data.**
+**Nothing above this line has been altered. This amendment is additive.**
+
+## Why this exists
+
+Phase 2 produced a dataset of **3,905 securities over 2015–2026, of which
+1,092 (28%) no longer trade.** What a holder actually recovered on delisting
+is not in price data, and the assumption chosen changes every result that
+touches that tail. Leaving it undeclared would let it be chosen later, after
+seeing which answer it produced.
+
+## What the data showed
+
+Two questions were asked of the 1,092 delistings before any threshold was set.
+
+**Is the outcome distribution bimodal?** No. Measured against the trailing
+250-session peak, delistings are spread almost uniformly from 0.10 to 1.05
+(median 0.57). Measured against the close 60 sessions earlier, likewise
+(median 0.83). **There is no natural split, so no single threshold is
+defensible.**
+
+**Are the tails separable?** Yes.
+
+| Evidence | Count | Share |
+|---|---|---|
+| Rising into the final session (`terminal_slide` ≥ 1.05) | ~315 | 29% |
+| Ended below 10% of the 250-session peak | ~87 | 8% |
+| Neither | ~690 | **63%** |
+
+A security whose price rises into its last session is converging toward an
+offer: an acquisition, where the holder was paid. One that ends far below its
+own recent peak is a collapse. The 63% in between is not separable from
+prices.
+
+**A correction recorded for the record.** An earlier measure compared the last
+close to the *first observed* close. That is confounded by however long a
+security traded — a company can triple over eight years and then collapse in
+its final quarter, and the two are indistinguishable under that measure. It
+was replaced before any threshold was chosen.
+
+## The declared treatment
+
+Delistings are classified three ways, using thresholds **read once from the
+distribution above and fixed here**:
+
+| Outcome | Test | Terminal value |
+|---|---|---|
+| `LIKELY_COLLAPSE` | `final_decline` ≤ **0.10** | 0 |
+| `LIKELY_ACQUISITION` | `terminal_slide` ≥ **1.05** | last close |
+| `UNCERTAIN` | everything else | **refused** |
+
+The collapse test runs first: a security far below its peak that bounced in
+its final weeks is a collapse, not an acquisition.
+
+## Reporting rule — binding
+
+**Every result that includes delisted securities must report two bands:**
+
+1. **Outer bound** — from assuming every delisting recovered its last close,
+   down to assuming none did. Never discarded.
+2. **Classified band** — the confident tails resolved, only the `UNCERTAIN`
+   middle floating.
+
+**A conclusion that holds across the outer bound does not depend on this
+amendment at all.** A conclusion that holds only inside the classified band
+depends on an inference from price data, and must be reported as such.
+
+## Limitations, stated in advance
+
+- These labels are **inferences, not records**. Deciding an acquisition from a
+  collapse properly requires corporate-action filings this project does not
+  have.
+- A security that spikes and is then *suspended* looks identical to one
+  acquired at a premium. This is why the labels remain `LIKELY_`.
+- The 63% `UNCERTAIN` share is not a defect to be optimised away. Narrowing it
+  by moving thresholds would be fitting the delisting assumption to the
+  answer, which is the specific failure this file exists to prevent.
+- **Changing either threshold requires a further dated amendment**, and counts
+  as an additional trial.
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -638,6 +724,7 @@ gone.**
 | 2026-08-04 | — | Initial registration of H1–H6 | Phase 1 foundation | Yes — no data existed |
 | 2026-08-04 | H2 (and H3/H4/H6 by reference) | **Amendment A1** — added Baseline B3 (Nifty200 Momentum 30, net of 0.22% and LTCG) as a mandatory blocking baseline | The primary signal is already an investable product; the original benchmark was insufficient | Yes — no data ingested, nothing tested |
 | 2026-08-04 | H4 | **Amendment A2** — declared the regime definition, data sources, evaluation windows, cost model and pass/fail criteria | H4 was registered with its definition DEFERRED; it must be fixed before testing | Yes — no price series downloaded, nothing plotted |
+| 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
 
 ---
 

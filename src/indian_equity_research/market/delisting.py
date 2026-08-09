@@ -35,16 +35,64 @@ from enum import StrEnum
 from indian_equity_research.market.bhavcopy import BhavRecord
 
 __all__ = [
+    "ClassificationConfig",
+    "DelistingOutcome",
     "DelistingRecord",
     "DelistingRegister",
     "TerminalReturnPolicy",
     "build_delisting_register",
+    "classify_delisting",
 ]
 
 #: A security absent for at least this long, with the market still trading, is
 #: treated as gone rather than merely suspended. Indian suspensions frequently
 #: run for months, so a short window would misclassify them.
 DEFAULT_ABSENCE_DAYS = 180
+
+#: Sessions before delisting over which the peak is taken - roughly a year.
+DEFAULT_TRAILING_WINDOW = 250
+#: Sessions before the end used for the terminal-slide measure - roughly a
+#: quarter, short enough to catch a sharp final fall.
+DEFAULT_SLIDE_WINDOW = 60
+
+
+class DelistingOutcome(StrEnum):
+    """What a delisting most likely was, judged from the final trajectory.
+
+    The evidence for these labels is weak and one-sided, so they stay
+    ``LIKELY_``. Neither histogram of the real data was bimodal: only the
+    extremes are separable, and roughly two thirds of delistings fall in
+    between and are honestly ``UNCERTAIN``.
+    """
+
+    #: Rising into the delisting - the price converging toward an offer.
+    LIKELY_ACQUISITION = "LIKELY_ACQUISITION"
+    #: Ended far below its own recent peak.
+    LIKELY_COLLAPSE = "LIKELY_COLLAPSE"
+    #: Not separable from price data. The majority.
+    UNCERTAIN = "UNCERTAIN"
+
+
+@dataclass(frozen=True, slots=True)
+class ClassificationConfig:
+    """Thresholds separating the classifiable tails from the ambiguous middle.
+
+    These are **declared, not tuned**. They come from reading the observed
+    distribution once - 29% of delistings rose in their final 60 sessions, 8%
+    ended below a tenth of their annual peak - and are fixed in Amendment A4.
+    Moving them to improve a result would be fitting the delisting assumption
+    to the answer.
+
+    Attributes:
+        acquisition_slide_threshold: ``terminal_slide`` at or above which a
+            delisting is read as an acquisition. A price rising into its final
+            session is the signature of converging toward an offer.
+        collapse_peak_threshold: ``final_decline`` at or below which a
+            delisting is read as a collapse.
+    """
+
+    acquisition_slide_threshold: float = 1.05
+    collapse_peak_threshold: float = 0.10
 
 
 class TerminalReturnPolicy(StrEnum):
@@ -62,6 +110,10 @@ class TerminalReturnPolicy(StrEnum):
     #: Refuse to assume. The backtest must exclude the security or supply a
     #: documented recovery value.
     UNKNOWN = "UNKNOWN"
+    #: Use the classification: acquisitions recover the last close, collapses
+    #: recover nothing, and the uncertain majority is refused. Narrows the
+    #: uncertainty band without pretending the middle is knowable.
+    CLASSIFIED = "CLASSIFIED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,10 +125,16 @@ class DelistingRecord:
         last_symbol: Ticker as at the final session.
         first_seen: Earliest session observed.
         last_seen: Final session observed.
-        first_close: Close on the first session observed. Needed to tell a
-            security that collapsed before delisting from one that was taken
-            out at a healthy price.
+        first_close: Close on the first session observed.
         last_close: Close on the final session.
+        peak_close: Highest close within the trailing window before delisting.
+            Comparing the last close to this - rather than to the first close
+            - is what distinguishes *how a security ended* from *how it did
+            over its life*. A company can triple over eight years and then
+            collapse in its final six months; measured against its first
+            price those two facts are indistinguishable.
+        close_before_end: Close roughly ``slide_window`` sessions before the
+            final one, for measuring the terminal slide.
         sessions_observed: Number of sessions the security traded.
         absent_days: Calendar days between the final session and the end of
             the dataset.
@@ -92,10 +150,35 @@ class DelistingRecord:
     last_seen: date
     first_close: float
     last_close: float
+    peak_close: float
+    close_before_end: float
     sessions_observed: int
     absent_days: int
     still_listed: bool
     policy: TerminalReturnPolicy = TerminalReturnPolicy.UNKNOWN
+
+    @property
+    def final_decline(self) -> float:
+        """Last close as a fraction of the trailing-window peak.
+
+        An acquisition delists near its recent high, often at a premium. A
+        collapse delists far below it. This is the discriminating measure;
+        :attr:`decline_from_first` is not, because it is confounded by however
+        long the security happened to trade.
+        """
+        if self.peak_close <= 0:
+            return 0.0
+        return self.last_close / self.peak_close
+
+    @property
+    def terminal_slide(self) -> float:
+        """Last close as a fraction of the close shortly before the end.
+
+        Captures a sharp final fall that a longer window would dilute.
+        """
+        if self.close_before_end <= 0:
+            return 0.0
+        return self.last_close / self.close_before_end
 
     @property
     def decline_from_first(self) -> float:
@@ -156,6 +239,8 @@ def build_delisting_register(
     *,
     absence_days: int = DEFAULT_ABSENCE_DAYS,
     policy: TerminalReturnPolicy = TerminalReturnPolicy.UNKNOWN,
+    trailing_window: int = DEFAULT_TRAILING_WINDOW,
+    slide_window: int = DEFAULT_SLIDE_WINDOW,
 ) -> DelistingRegister:
     """Derive a delisting register from observed trading.
 
@@ -168,6 +253,10 @@ def build_delisting_register(
         absence_days: Days of absence before a security counts as gone.
         policy: Terminal-return treatment recorded against each entry. The
             default refuses to assume anything.
+        trailing_window: Sessions before delisting over which the peak close
+            is taken.
+        slide_window: Sessions before the end used for the terminal-slide
+            measure.
 
     Returns:
         The register.
@@ -175,24 +264,10 @@ def build_delisting_register(
     Raises:
         ValueError: If no records are supplied.
     """
-    last_seen: dict[str, date] = {}
-    first_seen: dict[str, date] = {}
-    first_close: dict[str, float] = {}
-    last_close: dict[str, float] = {}
-    last_symbol: dict[str, str] = {}
-    sessions: dict[str, int] = {}
-
+    history: dict[str, list[tuple[date, float, str]]] = {}
     dataset_end: date | None = None
     for record in records:
-        isin = record.isin
-        sessions[isin] = sessions.get(isin, 0) + 1
-        if isin not in first_seen or record.trade_date < first_seen[isin]:
-            first_seen[isin] = record.trade_date
-            first_close[isin] = record.close
-        if isin not in last_seen or record.trade_date > last_seen[isin]:
-            last_seen[isin] = record.trade_date
-            last_close[isin] = record.close
-            last_symbol[isin] = record.symbol
+        history.setdefault(record.isin, []).append((record.trade_date, record.close, record.symbol))
         if dataset_end is None or record.trade_date > dataset_end:
             dataset_end = record.trade_date
 
@@ -203,19 +278,50 @@ def build_delisting_register(
     cutoff = dataset_end - timedelta(days=absence_days)
     listed = currently_listed or set()
     out: dict[str, DelistingRecord] = {}
-    for isin, final in last_seen.items():
-        if final > cutoff:
+    for isin, rows in history.items():
+        rows.sort()
+        final_date, final_close, final_symbol = rows[-1]
+        if final_date > cutoff:
             continue
+        trailing = rows[-trailing_window:]
+        slide_index = max(0, len(rows) - 1 - slide_window)
         out[isin] = DelistingRecord(
             isin=isin,
-            last_symbol=last_symbol[isin],
-            first_seen=first_seen[isin],
-            last_seen=final,
-            first_close=first_close[isin],
-            last_close=last_close[isin],
-            sessions_observed=sessions[isin],
-            absent_days=(dataset_end - final).days,
+            last_symbol=final_symbol,
+            first_seen=rows[0][0],
+            last_seen=final_date,
+            first_close=rows[0][1],
+            last_close=final_close,
+            peak_close=max(close for _, close, _ in trailing),
+            close_before_end=rows[slide_index][1],
+            sessions_observed=len(rows),
+            absent_days=(dataset_end - final_date).days,
             still_listed=isin in listed,
             policy=policy,
         )
     return DelistingRegister(records=out, dataset_end=dataset_end, absence_days=absence_days)
+
+
+def classify_delisting(
+    record: DelistingRecord, config: ClassificationConfig | None = None
+) -> DelistingOutcome:
+    """Read a delisting's final trajectory.
+
+    The collapse test runs first. A security can both sit far below its annual
+    peak *and* have risen over its final quarter - a dead-cat bounce before
+    the end - and that is a collapse, not an acquisition.
+
+    Args:
+        record: The delisting record.
+        config: Thresholds. Defaults to the values declared in Amendment A4.
+
+    Returns:
+        The most likely outcome, or ``UNCERTAIN`` where the price data does
+        not separate them.
+    """
+    cfg = config or ClassificationConfig()
+    if record.final_decline <= cfg.collapse_peak_threshold:
+        return DelistingOutcome.LIKELY_COLLAPSE
+    if record.terminal_slide >= cfg.acquisition_slide_threshold:
+        return DelistingOutcome.LIKELY_ACQUISITION
+    return DelistingOutcome.UNCERTAIN

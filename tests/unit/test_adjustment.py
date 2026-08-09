@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, timedelta
 
 import pytest
@@ -21,7 +22,12 @@ from indian_equity_research.market.corporate_actions import (
     CorporateAction,
     validate_price_series,
 )
-from indian_equity_research.market.delisting import DelistingRecord, TerminalReturnPolicy
+from indian_equity_research.market.delisting import (
+    DelistingOutcome,
+    DelistingRecord,
+    TerminalReturnPolicy,
+    classify_delisting,
+)
 from indian_equity_research.research.series import PriceSeries
 
 START = date(2024, 1, 1)
@@ -32,7 +38,9 @@ def series(closes: list[float], name: str = "X") -> PriceSeries:
     return PriceSeries(name, dates, tuple(closes))
 
 
-def delisting(first: float, last: float, isin: str = "INE111A01011") -> DelistingRecord:
+def delisting(
+    first: float, last: float, isin: str = "INE111A01011", peak: float | None = None
+) -> DelistingRecord:
     return DelistingRecord(
         isin=isin,
         last_symbol="X",
@@ -40,10 +48,19 @@ def delisting(first: float, last: float, isin: str = "INE111A01011") -> Delistin
         last_seen=START + timedelta(days=100),
         first_close=first,
         last_close=last,
+        peak_close=peak if peak is not None else max(first, last),
+        close_before_end=last,
         sessions_observed=100,
         absent_days=300,
         still_listed=False,
     )
+
+
+def rising(
+    before: float, last: float, isin: str = "INE111A01011", peak: float | None = None
+) -> DelistingRecord:
+    """A security whose price rose into its final session."""
+    return replace(delisting(before, last, isin, peak=peak), close_before_end=before)
 
 
 class TestAdjustmentValidation:
@@ -138,30 +155,77 @@ class TestTerminalReturn:
         assert terminal_return(delisting(200.0, 8.0), TerminalReturnPolicy.UNKNOWN) is None
 
 
+class TestClassifiedPolicy:
+    def test_acquisition_recovers_the_last_close(self) -> None:
+        record = rising(100.0, 120.0)
+        assert terminal_return(record, TerminalReturnPolicy.CLASSIFIED) == 120.0
+
+    def test_collapse_recovers_nothing(self) -> None:
+        record = delisting(100.0, 5.0, peak=200.0)
+        assert terminal_return(record, TerminalReturnPolicy.CLASSIFIED) == 0.0
+
+    def test_uncertain_is_refused(self) -> None:
+        """The majority. Refusing keeps it inside the reported band."""
+        record = delisting(100.0, 60.0, peak=100.0)
+        assert terminal_return(record, TerminalReturnPolicy.CLASSIFIED) is None
+
+    def test_collapse_wins_over_a_dead_cat_bounce(self) -> None:
+        """Far below its peak but rising at the end is still a collapse."""
+        record = rising(100.0, 8.0, peak=200.0)
+        assert classify_delisting(record) is DelistingOutcome.LIKELY_COLLAPSE
+
+
 class TestSensitivity:
-    def test_measures_how_many_had_already_collapsed(self) -> None:
-        records = [
-            delisting(200.0, 4.0, "INE111A01011"),  # 2% of first price
-            delisting(100.0, 90.0, "INE222B01012"),  # taken out healthy
-        ]
-        sensitivity = terminal_sensitivity(records, collapse_threshold=0.10)
-        assert sensitivity.securities == 2
-        assert sensitivity.already_collapsed == 1
-        assert sensitivity.collapsed_fraction == pytest.approx(0.5)
+    def test_counts_the_three_outcomes(self) -> None:
+        s = terminal_sensitivity(
+            [
+                rising(100.0, 120.0, isin="INE111A01011"),
+                delisting(100.0, 5.0, "INE222B01012", peak=200.0),
+                delisting(100.0, 60.0, "INE333C01013", peak=100.0),
+            ]
+        )
+        assert (s.likely_acquisition, s.likely_collapse, s.uncertain) == (1, 1, 1)
 
-    def test_spread_is_the_whole_last_price_value(self) -> None:
-        records = [delisting(200.0, 4.0), delisting(100.0, 90.0, "INE222B01012")]
-        sensitivity = terminal_sensitivity(records)
-        assert sensitivity.spread == pytest.approx(94.0)
+    def test_classification_narrows_the_band(self) -> None:
+        s = terminal_sensitivity(
+            [
+                rising(100.0, 120.0, isin="INE111A01011"),
+                delisting(100.0, 5.0, "INE222B01012", peak=200.0),
+                delisting(100.0, 60.0, "INE333C01013", peak=100.0),
+            ]
+        )
+        assert s.outer_band == pytest.approx(185.0)
+        assert s.classified_band == pytest.approx(60.0)
+        assert s.band_narrowing == pytest.approx(1 - 60 / 185)
 
-    def test_decline_from_first(self) -> None:
-        assert delisting(200.0, 4.0).decline_from_first == pytest.approx(0.02)
+    def test_outer_band_is_never_discarded(self) -> None:
+        """The full range stays reported so a dependence on the read is visible."""
+        s = terminal_sensitivity([delisting(100.0, 60.0, peak=100.0)])
+        assert s.outer_band == pytest.approx(60.0)
+        assert s.value_at_total_loss == 0.0
 
-    def test_summary_reports_the_collapse_share(self) -> None:
-        records = [delisting(200.0, 4.0)]
-        assert "had already fallen" in terminal_sensitivity(records).summary()
+    def test_uncertain_fraction(self) -> None:
+        s = terminal_sensitivity(
+            [
+                delisting(100.0, 5.0, "INE111A01011", peak=200.0),
+                delisting(100.0, 60.0, "INE222B01012", peak=100.0),
+            ]
+        )
+        assert s.uncertain_fraction == pytest.approx(0.5)
+
+    def test_final_decline_uses_the_peak_not_the_first_price(self) -> None:
+        """A security that tripled then collapsed scores low, as it should."""
+        record = delisting(100.0, 300.0, peak=900.0)
+        assert record.decline_from_first == pytest.approx(3.0)
+        assert record.final_decline == pytest.approx(1 / 3)
+
+    def test_summary_reports_both_bands(self) -> None:
+        text = terminal_sensitivity([delisting(100.0, 60.0, peak=100.0)]).summary()
+        assert "uncertain" in text
+        assert "narrower" in text
 
     def test_empty_input(self) -> None:
-        sensitivity = terminal_sensitivity([])
-        assert sensitivity.securities == 0
-        assert sensitivity.collapsed_fraction == 0.0
+        s = terminal_sensitivity([])
+        assert s.securities == 0
+        assert s.uncertain_fraction == 0.0
+        assert s.band_narrowing == 0.0
