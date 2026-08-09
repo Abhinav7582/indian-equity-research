@@ -150,6 +150,9 @@ class ReturnAnomaly:
         close: Close on the date.
         classification: How it was accounted for.
         detail: Explanation.
+        inferred_multiplier: For a suspected unadjusted action, the price
+            multiplier the move matched. Carried as a number rather than left
+            in the prose so the adjustment engine need not parse text.
     """
 
     isin: str
@@ -159,6 +162,7 @@ class ReturnAnomaly:
     close: float
     classification: AnomalyClass
     detail: str = ""
+    inferred_multiplier: float | None = None
 
     @property
     def blocks(self) -> bool:
@@ -364,6 +368,7 @@ def validate_price_series(
                     AnomalyClass.SUSPECTED_UNADJUSTED_ACTION,
                     f"price ratio {multiplier:.4f} ~ {candidate:.4f}, consistent with an "
                     f"unadjusted {description}. Previous close {prev_date.isoformat()}.",
+                    inferred_multiplier=candidate,
                 )
             )
             continue

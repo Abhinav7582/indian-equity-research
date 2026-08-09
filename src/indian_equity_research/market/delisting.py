@@ -73,6 +73,9 @@ class DelistingRecord:
         last_symbol: Ticker as at the final session.
         first_seen: Earliest session observed.
         last_seen: Final session observed.
+        first_close: Close on the first session observed. Needed to tell a
+            security that collapsed before delisting from one that was taken
+            out at a healthy price.
         last_close: Close on the final session.
         sessions_observed: Number of sessions the security traded.
         absent_days: Calendar days between the final session and the end of
@@ -87,11 +90,23 @@ class DelistingRecord:
     last_symbol: str
     first_seen: date
     last_seen: date
+    first_close: float
     last_close: float
     sessions_observed: int
     absent_days: int
     still_listed: bool
     policy: TerminalReturnPolicy = TerminalReturnPolicy.UNKNOWN
+
+    @property
+    def decline_from_first(self) -> float:
+        """Fraction of the first observed price still standing at the end.
+
+        ``0.02`` means the security ended at 2% of where it was first seen -
+        already worthless before it delisted.
+        """
+        if self.first_close <= 0:
+            return 0.0
+        return self.last_close / self.first_close
 
     @property
     def is_suspended_not_delisted(self) -> bool:
@@ -162,6 +177,7 @@ def build_delisting_register(
     """
     last_seen: dict[str, date] = {}
     first_seen: dict[str, date] = {}
+    first_close: dict[str, float] = {}
     last_close: dict[str, float] = {}
     last_symbol: dict[str, str] = {}
     sessions: dict[str, int] = {}
@@ -172,6 +188,7 @@ def build_delisting_register(
         sessions[isin] = sessions.get(isin, 0) + 1
         if isin not in first_seen or record.trade_date < first_seen[isin]:
             first_seen[isin] = record.trade_date
+            first_close[isin] = record.close
         if isin not in last_seen or record.trade_date > last_seen[isin]:
             last_seen[isin] = record.trade_date
             last_close[isin] = record.close
@@ -194,6 +211,7 @@ def build_delisting_register(
             last_symbol=last_symbol[isin],
             first_seen=first_seen[isin],
             last_seen=final,
+            first_close=first_close[isin],
             last_close=last_close[isin],
             sessions_observed=sessions[isin],
             absent_days=(dataset_end - final).days,
