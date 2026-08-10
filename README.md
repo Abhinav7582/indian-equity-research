@@ -182,6 +182,10 @@ tests/       Unit and integration suites
   supports for Indian equities, and which sources to distrust
 - [`docs/data_sources.md`](docs/data_sources.md) — Phase 2 data acquisition:
   sources, costs, the 2024 bhavcopy format change, licensing boundaries
+- [`docs/portfolio_template.md`](docs/portfolio_template.md) — template for a
+  personal holdings snapshot. Fill into `data/reference/portfolio.md`
+  (git-ignored). **Never read by the backtester** — see the boundary note in
+  the template.
 - [`docs/verification.md`](docs/verification.md) — **reproduce every claim in
   this repo from a clean clone**, with the expected output at each step
 - [`docs/adr/`](docs/adr/) — architecture decision records
