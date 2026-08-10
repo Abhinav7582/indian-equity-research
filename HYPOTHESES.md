@@ -645,6 +645,99 @@ depends on an inference from price data, and must be reported as such.
 - **Changing either threshold requires a further dated amendment**, and counts
   as an additional trial.
 
+---
+
+# AMENDMENT A5 — Proxy universe declared as scaffolding
+
+**Date: 2026-08-10**
+**Declared before the proxy universe has been built, before any strategy has
+been run against stock-level data, and before any universe-dependent result
+exists.**
+**Nothing above this line has been altered. This amendment is additive.**
+
+## Why this exists
+
+Phase 3 needs a tradeable universe. The honest universe is the **actual
+historical membership of the Nifty 100**, which changes at semi-annual
+rebalances and can only be recovered from roughly 30–40 NSE Indices circulars.
+Those circulars have not been collected.
+
+There are two ways to handle that, and only one of them is safe.
+
+The unsafe way is to build a convenient universe, get the engine working,
+produce results, and then decide whether the real membership is worth the
+effort. By that point the answer is contaminated: the convenient choice has
+already produced numbers, and replacing it means throwing away work — which is
+exactly the pressure that makes people keep the convenient choice and stop
+mentioning it.
+
+The safe way is to declare, in advance and in writing, that the convenient
+universe is **scaffolding with no evidentiary status**. That is this amendment.
+
+## The declared proxy
+
+Fixed here, before it is implemented and before any result is seen:
+
+| Parameter | Value | Why this, stated before results exist |
+|---|---|---|
+| Ranking metric | **Median daily traded value over the trailing 126 sessions** | Median not mean, so a single delivery-driven spike cannot lift a stock into the universe. 126 sessions ≈ six months, matching the rebalance interval. |
+| Size | **Top 100** | Matches the Nifty 100 count so position sizing and concentration are comparable, even though membership will not be. |
+| Series eligibility | **`EQ` only** | `BE`/`BZ` are trade-to-trade: compulsory delivery, no intraday netting. Their liquidity is not comparable and their costs are different. |
+| Minimum history | **126 sessions of observed trading** | A stock cannot be ranked on a window it does not have. Ranking on a partial window silently favours recent listings. |
+| Rebalance | **Semi-annual, effective the first session of April and October** | Mirrors NSE's cadence. Fixed here so it cannot later be tuned. |
+| Reconstitution lag | **Ranking window ends 5 sessions before the effective date** | The ranking must be computable from data available before it is acted on. |
+| Delisted securities | **Retained until they stop trading**, terminal value per Amendment A4 | No survivorship bias. A5 does not weaken A4. |
+
+## What this proxy is, and what it is not
+
+**It is a liquidity ranking. The Nifty 100 is a size ranking.** NSE selects on
+full market capitalisation from the Nifty 500 universe and applies liquidity as
+a filter, not as the criterion. Turnover and market capitalisation are
+correlated but far from identical: this proxy will admit small, heavily traded,
+often speculative stocks that the real index excludes, and will drop large,
+quietly held ones that it includes.
+
+That difference is not a rounding error. It is a systematic tilt toward exactly
+the kind of stock that produces flattering momentum backtests.
+
+## Binding guard — the point of this amendment
+
+1. **No result produced on the proxy universe may be entered in the trial
+   register.** Not as a trial, not as a preliminary finding, not as a footnote.
+2. **No result produced on the proxy universe may be cited as evidence for or
+   against H1, H2, H3, H5 or H6.**
+3. The proxy exists **solely** to exercise the engine: to verify that costs are
+   charged, that execution lags correctly, that leakage is detectable, and that
+   the plumbing does what it claims.
+4. **Every H1–H6 test must be run on reconstructed Nifty 100 membership.** If
+   the circulars cannot be obtained, that is a finding to be reported — not a
+   licence to substitute the proxy.
+5. Any output generated on the proxy must be written to paths marked
+   `proxy_universe/` and must carry the header
+   `SCAFFOLDING — NOT EVIDENCE (Amendment A5)`.
+
+## The failure mode this is designed to prevent
+
+If the proxy produces an encouraging result, the temptation will be to treat
+collecting the circulars as optional. If it produces a discouraging one, the
+temptation will be to blame the proxy and collect the circulars hoping for
+better. **Both are the same error**: letting the result decide the method.
+Declaring in advance that the proxy decides nothing removes the incentive in
+both directions.
+
+## Limitation stated in advance
+
+Building the engine against a universe with a known tilt risks tuning the
+engine — its filters, its liquidity thresholds, its handling of thin names — to
+that tilt. Mitigation: no parameter of the strategy may be chosen or adjusted
+while looking at proxy-universe output. Only *mechanical* properties
+(does it lag correctly, are costs charged, is leakage detected) may be verified
+there.
+
+**Superseding this amendment requires a further dated amendment.**
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -725,6 +818,7 @@ gone.**
 | 2026-08-04 | H2 (and H3/H4/H6 by reference) | **Amendment A1** — added Baseline B3 (Nifty200 Momentum 30, net of 0.22% and LTCG) as a mandatory blocking baseline | The primary signal is already an investable product; the original benchmark was insufficient | Yes — no data ingested, nothing tested |
 | 2026-08-04 | H4 | **Amendment A2** — declared the regime definition, data sources, evaluation windows, cost model and pass/fail criteria | H4 was registered with its definition DEFERRED; it must be fixed before testing | Yes — no price series downloaded, nothing plotted |
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
+| 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
 
 ---
 
