@@ -438,6 +438,54 @@ def test_charges_by_component_sums_to_total_charges() -> None:
 # ==========================================================================
 
 
+def test_a_hole_in_the_session_calendar_is_refused() -> None:
+    """Regression test, from a real defect in this project's own archive.
+
+    2025 was entirely absent from the bhavcopy directory. The engine ran
+    happily across the 366-day hole, held positions through it, and booked the
+    whole year as one session's return -- which annualisation then treated as a
+    single day. Measured Sharpe went from 0.817 to 0.961 on missing files
+    alone. The equity curve looked completely ordinary.
+    """
+    days = [START + dt.timedelta(days=i) for i in range(5)]
+    days += [START + dt.timedelta(days=400 + i) for i in range(5)]
+    data = {"ACME": {d: Bar(d, 100.0, 100.0, 100.0, 100.0) for d in days}}
+
+    with pytest.raises(ValueError, match="gap"):
+        run_backtest(data, days, lambda _view: {"ACME": 1.0})
+
+
+def test_a_genuine_closure_can_be_allowed_explicitly() -> None:
+    """Allow a genuine closure to be waived explicitly.
+
+    The guard must be overridable or it would block legitimate work, but only
+    deliberately, never by default.
+    """
+    days = [START + dt.timedelta(days=i) for i in range(5)]
+    days += [START + dt.timedelta(days=400 + i) for i in range(5)]
+    data = {"ACME": {d: Bar(d, 100.0, 100.0, 100.0, 100.0) for d in days}}
+
+    result = run_backtest(
+        data,
+        days,
+        lambda _view: {"ACME": 1.0},
+        config=EngineConfig(initial_capital=100_000.0, max_session_gap_days=None),
+    )
+    assert len(result.equity) == len(days)
+
+
+def test_ordinary_weekends_and_holidays_do_not_trip_the_guard() -> None:
+    """A ten-day default must tolerate a long weekend plus a festival."""
+    days = [START + dt.timedelta(days=i) for i in range(20)]
+    days = [d for d in days if d.weekday() < 5]
+    days = [d for d in days if d != days[6]]  # drop a holiday mid-run
+    data = {"ACME": {d: Bar(d, 100.0, 100.0, 100.0, 100.0) for d in days}}
+    result = run_backtest(
+        data, days, lambda _view: {"ACME": 1.0}, config=EngineConfig(initial_capital=100_000.0)
+    )
+    assert len(result.equity) == len(days)
+
+
 def test_leverage_is_refused() -> None:
     days = sessions(5)
     data = flat_series("ACME", days, 100.0)

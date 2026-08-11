@@ -738,6 +738,95 @@ there.
 
 ---
 
+# AMENDMENT A6 — Capital limit, abandonment rule, and the derivatives gate
+
+**Date: 2026-08-10**
+**Declared before any strategy result exists, before any capital has been
+deployed, and before any derivatives work has begun.**
+**Nothing above this line has been altered. This amendment is additive.**
+
+## Why this exists
+
+Everything in this file so far constrains *how results are produced*. Nothing
+yet constrains *what happens when a result arrives*. That gap is where most
+retail capital is lost: not in the research, but in the moment after an
+encouraging backtest, when position size and stopping conditions get decided by
+enthusiasm rather than by a rule written while nothing was at stake.
+
+The owner has stated an intention to eventually explore derivatives. That
+intention is legitimate and this amendment does not forbid it. It fixes the
+conditions **now**, while they are still theoretical and therefore cheap to
+set honestly.
+
+## Capital limit — binding
+
+| Constraint | Value |
+|---|---|
+| Maximum capital ever routed through this system | **₹3,00,000** |
+| As a share of financial assets at declaration | 4.6% |
+| Increase permitted | **Only by a further dated amendment**, and only after the abandonment test below has been *passed*, not merely not-failed |
+| Capital may not be increased because | a result improved, a drawdown recovered, or the owner feels more confident |
+
+The limit is a rupee figure, not a percentage. A percentage limit silently
+raises the rupee amount every time the portfolio grows — which means it loosens
+fastest precisely when success has made overconfidence most likely.
+
+## Abandonment rule — binding
+
+The system is **abandoned** — code archived, no capital deployed, hypotheses
+marked `REJECTED` — if, after **two full years of paper trading** from the first
+live signal:
+
+1. It has **not** beaten the Nifty200 Momentum 30 index fund (Baseline B3 under
+   Amendment A1) net of modelled costs and tax, **or**
+2. Its realised Deflated Sharpe Ratio fails to clear the threshold implied by
+   the trial register at that date, **or**
+3. Fewer than **24 months** of genuine out-of-sample paper results exist,
+   because the requirement is time survived, not trials run.
+
+**Two years is deliberately long.** It is long enough to contain a drawdown and
+short enough that the sunk cost stays bearable. Any shortening requires a dated
+amendment and counts as a trial.
+
+**What abandonment does not mean.** It does not mean the research was wasted, and
+it does not bar future work under a new pre-registration. It means *this* set of
+hypotheses, tested this way, did not clear the bar.
+
+## Derivatives gate — conditions fixed in advance
+
+F&O work is **out of scope until every condition below is met**. Each is
+falsifiable and none depends on how the equity research turns out.
+
+1. A **separate dated amendment** stating the exact strategy, instruments,
+   maximum loss per position, and pass/fail criteria, written before any
+   derivatives backtest is run.
+2. The equity system has **passed** the abandonment test above. Derivatives are
+   not a response to cash equities disappointing.
+3. Capital cap of **₹50,000** — one sixth of the equity cap — and no position
+   whose maximum loss exceeds **₹10,000**.
+4. **No naked short options, ever.** Undefined-risk positions are excluded by
+   this amendment permanently, not provisionally. A defined-risk structure can
+   lose what was staked; an undefined-risk one can lose more than the account.
+5. Covered and hedged structures only: covered calls against stock already held,
+   protective puts, defined-risk spreads.
+6. The base rate must be restated in that amendment: **SEBI found 91% of
+   individual traders lost money in equity derivatives in FY25, ₹1,05,603 crore
+   net, up 41% year on year.** Not as discouragement — as the prior any claimed
+   edge must be measured against.
+
+## The specific failure this is designed to prevent
+
+The sequence that empties retail accounts is well documented and always the
+same: a strategy underperforms, the response is to increase size or move to a
+higher-leverage instrument to make it back, and the loss that follows is larger
+than every gain preceding it. Conditions 2 and 3 above break that sequence at
+the exact point it starts.
+
+**Superseding any clause in this amendment requires a further dated amendment,
+and each such amendment is logged as a trial.**
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -818,6 +907,7 @@ gone.**
 | 2026-08-04 | H2 (and H3/H4/H6 by reference) | **Amendment A1** — added Baseline B3 (Nifty200 Momentum 30, net of 0.22% and LTCG) as a mandatory blocking baseline | The primary signal is already an investable product; the original benchmark was insufficient | Yes — no data ingested, nothing tested |
 | 2026-08-04 | H4 | **Amendment A2** — declared the regime definition, data sources, evaluation windows, cost model and pass/fail criteria | H4 was registered with its definition DEFERRED; it must be fixed before testing | Yes — no price series downloaded, nothing plotted |
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
+| 2026-08-10 | all (deployment) | **Amendment A6** — fixed a ₹3,00,000 capital cap, a two-year abandonment test against Baseline B3, and six binding pre-conditions on any future derivatives work including a permanent ban on naked short options | Nothing in this file yet governed what happens *after* a result arrives, which is where retail capital is actually lost. The owner intends to explore F&O eventually; the conditions are cheapest to set honestly while still theoretical | Yes — no strategy result exists, no capital deployed, no derivatives work begun |
 | 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
 
 ---

@@ -41,6 +41,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 from typing import Final
 
 from indian_equity_research.backtest.costs import ChargeBreakdown, CostSchedule, Side, charges_for
@@ -187,6 +188,11 @@ class EngineConfig:
     # rebalancing trades value-destroying, and executing them anyway would
     # understate the drag a real book suffers from constant small adjustments.
     minimum_trade_value: float = 1_000.0
+    # Largest permitted gap between consecutive sessions. Anything longer is
+    # almost always missing data rather than a genuine market closure -- the
+    # longest real NSE closure in modern history is a handful of days. Set to
+    # None only when a gap is known to be genuine, and say why at the call site.
+    max_session_gap_days: int | None = 10
 
     def __post_init__(self) -> None:
         """Reject configurations that cannot describe a real portfolio."""
@@ -194,6 +200,10 @@ class EngineConfig:
             raise ValueError(f"initial_capital must be positive, got {self.initial_capital}")
         if self.minimum_trade_value < 0:
             raise ValueError("minimum_trade_value must not be negative")
+        if self.max_session_gap_days is not None and self.max_session_gap_days < 1:
+            raise ValueError(
+                f"max_session_gap_days must be positive or None, got {self.max_session_gap_days}"
+            )
 
 
 @dataclass
@@ -266,6 +276,7 @@ def run_backtest(
         raise ValueError("sessions must not be empty")
     if list(sessions) != sorted(set(sessions)):
         raise ValueError("sessions must be sorted ascending and free of duplicates")
+    _check_session_continuity(sessions, cfg.max_session_gap_days)
 
     decide = rebalance_on or (lambda _: True)
     cash = cfg.initial_capital
@@ -301,6 +312,42 @@ def run_backtest(
         pending = dict(targets)
 
     return result
+
+
+def _check_session_continuity(sessions: Sequence[dt.date], limit: int | None) -> None:
+    """Refuse to run across a hole in the session calendar.
+
+    Missing data does not announce itself. A year absent from the archive looks
+    exactly like one very eventful trading day: the engine holds positions
+    across it, marks them at the last available close, and then books the whole
+    period's move as a single-session return.
+
+    That single return is then annualised as if it spanned one day, which
+    inflates every risk statistic downstream. Measured on this project's own
+    data, a 366-day gap raised the Sharpe ratio from 0.817 to 0.961 -- an 18%
+    improvement produced entirely by absent files.
+
+    Nothing about the resulting equity curve looks wrong, which is why this has
+    to be a hard failure rather than a warning.
+    """
+    if limit is None or len(sessions) < 2:
+        return
+    # itertools.pairwise, not zip(sessions, sessions[1:], strict=True).
+    # The strict form raises on every input, because the two sequences differ
+    # in length by one by construction. This is the third time that exact
+    # mistake has been made in this repository -- see market/calendar.py and
+    # research/series.py -- which is why it is written down here.
+    gaps = [(a, b, (b - a).days) for a, b in pairwise(sessions) if (b - a).days > limit]
+    if not gaps:
+        return
+    worst = max(gaps, key=lambda g: g[2])
+    raise ValueError(
+        f"session calendar has {len(gaps)} gap(s) longer than {limit} days; "
+        f"the largest is {worst[2]} days ({worst[0]} to {worst[1]}). "
+        f"This is almost certainly missing data, and running across it would "
+        f"annualise that whole period as a single session. Fill the gap, or "
+        f"pass max_session_gap_days=None if the closure is genuine."
+    )
 
 
 def _validate_targets(targets: Mapping[str, float], when: dt.date) -> None:
