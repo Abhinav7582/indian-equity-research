@@ -27,47 +27,69 @@ rather than as a trading system.
 
 ## Current phase
 
-**Phase 1.5 — complete.** The first hypothesis has been tested and rejected:
-see [`HYPOTHESES.md`](HYPOTHESES.md) trial #1. The regime overlay declared in
-Amendment A2 increased drawdown rather than reducing it, and lost to a static
-75:25 momentum/G-Sec blend. Cost: ~2 units of effort, no capital at risk.
+**Phase 3 — complete.** The full pipeline runs end to end: bhavcopy → universe →
+engine → metrics → statistical gates. See [`ROADMAP.md`](ROADMAP.md) for what
+comes next and what is blocking it.
 
-**Phase 1 — Research Foundation.** Project skeleton, typed configuration,
-structured logging, database plumbing, a small read-only CLI, tests, and the
-pre-registered hypotheses in [`HYPOTHESES.md`](HYPOTHESES.md).
+**One hypothesis tested and rejected.** H4's regime overlay increased drawdown
+rather than reducing it and lost to a static 75:25 blend
+([`HYPOTHESES.md`](HYPOTHESES.md), trial #1). Cost: no capital at risk.
 
 ### What exists
 
-- Layered, validated configuration (YAML for non-secrets, environment
-  variables for secrets) with production safety checks
-- Structured logging with credential redaction
-- SQLAlchemy 2.x declarative base with Alembic-ready naming conventions
-- Engine, session factory and a read-only database health check
-- CLI: `version`, `config-check`, `db-health`
-- Generic date utilities (weekday and timezone helpers only)
-- Unit and integration test suites
-- Local PostgreSQL via Docker Compose
-- Six pre-registered, falsifiable research hypotheses, all `NOT_TESTED`
+**Foundation** — layered validated configuration, structured logging with
+credential redaction, SQLAlchemy 2.x base with Alembic-ready naming, local
+PostgreSQL via Docker Compose.
 
-### What does not exist (deliberate non-goals for this phase)
+**Data layer** — daily archiver with a hash-chained manifest, trading calendar
+from observed sessions, instrument master with explicit resolution basis,
+bhavcopy ingest across both the legacy and UDiFF formats, corporate-action
+validator, delisting register with three-way classification, back-adjustment
+engine with provenance.
+
+**Backtest layer** — a date-versioned Indian cost model accurate to the paisa,
+an event-driven engine that makes look-ahead structurally impossible, the A5
+proxy universe, and Deflated Sharpe Ratio / Probability of Backtest Overfitting
+gates.
+
+**Discipline** — six pre-registered hypotheses, six dated amendments, a trial
+register, and a self-deception suite that is itself mutation-tested: twelve
+deliberate bugs injected, twelve caught.
+
+CLI: `version`, `config-check`, `db-health`, `h4-regime`, `archive`,
+`reference`, `bhavcopy`.
+
+### What still does not exist
 
 | Not implemented | Belongs to |
 |---|---|
-| NSE / BSE scraping, bhavcopy ingestion | Phase 2 |
-| Corporate-action processing | Phase 2 |
-| Historical index membership reconstruction | Phase 2 |
-| Backtesting engine | Phase 3 |
+| Purged / embargoed walk-forward cross-validation | Phase 3g |
 | Momentum, quality or any other signal | Phase 4 |
-| Portfolio construction, risk engine | Phase 6 |
-| Shadow portfolio generation | Phase 7 |
-| **Groww API authentication, market data or orders** | **Much later, if ever** |
-| Live or paper order placement | **Not in scope for this project** |
-| Machine learning, news processing, LLM features | Later, only if a baseline works |
+| Allocation and rebalancing system | Phase 5 |
+| Research into instruments beyond cash equity | Phase 6 |
+| Shadow portfolio, paper trading | Phase 7 |
+| **Groww API authentication, market data or orders** | **Only if Amendment A6 is passed** |
+| Live order placement | **Not in scope for this project** |
+| Machine learning, news processing, LLM features | Only if a baseline works first |
 
 **No database tables are defined yet.** Modelling instruments, prices and
 corporate actions is deferred until the point-in-time requirements are fixed,
 because retrofitting point-in-time correctness into an existing schema is far
-more expensive than designing for it.
+more expensive than designing for it. The research path currently runs on files,
+not on the database.
+
+### Blocked on one remaining download
+
+Nothing in Phase 4 can produce a trustworthy result until these land. Steps are
+in [`ROADMAP.md`](ROADMAP.md).
+
+1. **NSE index-change press releases** — the real index membership. Under
+   Amendment A5 no hypothesis can be tested on the proxy universe. The parser
+   is built and tested; only the PDFs are missing. See
+   [`docs/universe_reconstruction.md`](docs/universe_reconstruction.md).
+
+**Done:** bhavcopy 2015-01-01 to 2026-08-05 (2,861 sessions, 5.33M rows, no
+gaps) and NIFTY 100 TRI 2015–2026 (12 files).
 
 ## Technology stack
 
@@ -169,8 +191,13 @@ tests/       Unit and integration suites
 
 ## Documentation
 
-- [`HYPOTHESES.md`](HYPOTHESES.md) — pre-registered hypotheses H1–H6, plus
-  Amendment A1. **Read this before writing any research code.**
+- [`HYPOTHESES.md`](HYPOTHESES.md) — pre-registered hypotheses H1–H6 and
+  Amendments A1–A6, including the universe rule (A5) and the capital cap,
+  abandonment test and derivatives gate (A6). **Read this before writing any
+  research code.**
+- [`ROADMAP.md`](ROADMAP.md) — the single forward plan: what is done, what is
+  blocked, the three outstanding downloads, and Phases 4–7. Supersedes any
+  older plan elsewhere in the repository.
 - [`docs/benchmarks.md`](docs/benchmarks.md) — **the real bar.** The primary
   signal is already sold as an ETF at 0.22%; this computes what the system
   must beat and why.
@@ -186,6 +213,9 @@ tests/       Unit and integration suites
   personal holdings snapshot. Fill into `data/reference/portfolio.md`
   (git-ignored). **Never read by the backtester** — see the boundary note in
   the template.
+- [`docs/universe_reconstruction.md`](docs/universe_reconstruction.md) — how to
+  obtain and parse NSE index-change press releases, and how to walk membership
+  backwards from today's constituent list
 - [`docs/verification.md`](docs/verification.md) — **reproduce every claim in
   this repo from a clean clone**, with the expected output at each step
 - [`docs/adr/`](docs/adr/) — architecture decision records
