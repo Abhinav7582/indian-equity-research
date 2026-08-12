@@ -57,7 +57,7 @@ register, and a self-deception suite that is itself mutation-tested: twelve
 deliberate bugs injected, twelve caught.
 
 CLI: `version`, `config-check`, `db-health`, `h4-regime`, `archive`,
-`reference`, `bhavcopy`.
+`reference`, `bhavcopy`, `circulars`.
 
 ### What still does not exist
 
@@ -213,6 +213,9 @@ tests/       Unit and integration suites
   personal holdings snapshot. Fill into `data/reference/portfolio.md`
   (git-ignored). **Never read by the backtester** — see the boundary note in
   the template.
+- [`docs/circulars_worklist.md`](docs/circulars_worklist.md) — the 15 press
+  releases that need reading by eye, why each failed to parse, and the three
+  coverage gaps that block Phase 4
 - [`docs/universe_reconstruction.md`](docs/universe_reconstruction.md) — how to
   obtain and parse NSE index-change press releases, and how to walk membership
   backwards from today's constituent list

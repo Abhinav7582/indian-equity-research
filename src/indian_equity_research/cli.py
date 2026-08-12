@@ -54,6 +54,7 @@ COMMANDS: Final[tuple[str, ...]] = (
     "archive",
     "reference",
     "bhavcopy",
+    "circulars",
 )
 
 _PROGRAM = "indian-equity-research"
@@ -81,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
         "archive": "Snapshot sources that overwrite themselves. Read-only, one request per day.",
         "reference": "Report the trading calendar and instrument master built from local data.",
         "bhavcopy": "Plan, fetch or validate historical NSE bhavcopy files.",
+        "circulars": "Collect and parse NSE index-change press releases.",
     }
     created = {
         command: subparsers.add_parser(command, help=help_by_command[command])
@@ -137,6 +139,43 @@ def build_parser() -> argparse.ArgumentParser:
         "--validate",
         action="store_true",
         help="Parse the local files and run the corporate-action validator.",
+    )
+
+    circ = created["circulars"]
+    circ.add_argument(
+        "--from-listings",
+        action="store_true",
+        help="Read saved /media pages in data/raw/circulars/listings/ and plan from them.",
+    )
+    circ.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Plan candidate URLs across the semi-annual review windows instead.",
+    )
+    circ.add_argument(
+        "--first-year", type=int, default=2015, help="First year to sweep. Default 2015."
+    )
+    circ.add_argument(
+        "--last-year", type=int, default=None, help="Last year to sweep. Defaults to this year."
+    )
+    circ.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Actually download. Without this, only a plan is printed.",
+    )
+    circ.add_argument(
+        "--limit", type=int, default=None, help="Stop after N candidates. For a cautious first run."
+    )
+    circ.add_argument(
+        "--delay", type=float, default=2.0, help="Minimum seconds between requests (floor: 1)."
+    )
+    circ.add_argument(
+        "--parse",
+        action="store_true",
+        help="Read the downloaded PDFs and print the Nifty 100 changes found.",
+    )
+    circ.add_argument(
+        "--index", default="Nifty 100", help="Index to extract when parsing. Default 'Nifty 100'."
     )
     return parser
 
@@ -423,6 +462,206 @@ def _run_reference(settings: Settings) -> int:
     return EXIT_FAILURE
 
 
+def _run_circulars(settings: Settings, args: argparse.Namespace) -> int:
+    """Collect and parse NSE index-change press releases.
+
+    Three modes, deliberately separate:
+
+    * ``--from-listings`` reads saved ``/media`` pages. Exact, because the
+      listing is authoritative.
+    * ``--sweep`` guesses candidate URLs across the review windows. Cheap, and
+      it misses interim changes.
+    * ``--parse`` reads what has been downloaded and prints the changes.
+
+    Nothing is downloaded without ``--fetch``.
+    """
+    import time as _time
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
+
+    from indian_equity_research.ingest.circulars_fetch import (
+        CircularFetchConfig,
+        extract_release_links,
+        fetch_releases,
+        is_possibly_relevant,
+        plan_sweep,
+        semi_annual_windows,
+    )
+    from indian_equity_research.ingest.fetcher import UrlFetcher
+    from indian_equity_research.market.index_changes import (
+        IndexChangeError,
+        parse_index_section,
+        read_release_pdf,
+    )
+
+    destination = settings.raw_dir / "circulars"
+    listings_dir = destination / "listings"
+
+    if args.parse:
+        return _parse_circulars(destination, args.index, parse_index_section, read_release_pdf,
+                                IndexChangeError)
+
+    if not (args.from_listings or args.sweep):
+        print("Specify --from-listings, --sweep, or --parse.")
+        print()
+        print("  --from-listings   preferred. Save one /media page per year to")
+        print(f"                    {listings_dir}")
+        print("                    (File > Save Page As > Webpage, HTML Only)")
+        print("  --sweep           guess URLs across the Feb and Aug review windows")
+        print("  --parse           read the PDFs already downloaded")
+        return EXIT_FAILURE
+
+    already = {p.name for p in destination.glob("ind_prs*.pdf")} if destination.exists() else set()
+    urls: list[str] = []
+
+    if args.from_listings:
+        pages = sorted(listings_dir.glob("*.html")) if listings_dir.exists() else []
+        if not pages:
+            print(f"No saved listing pages in {listings_dir}")
+            print()
+            print("For each year 2015 to now:")
+            print("  1. Open https://www.niftyindices.com/media")
+            print("  2. Select the year")
+            print("  3. File > Save Page As > Webpage, HTML Only")
+            print(f"  4. Save as {listings_dir}/media_YYYY.html")
+            print()
+            print("The year filter runs in the browser, so the page cannot be")
+            print("fetched per-year over HTTP. This is the reliable route.")
+            return EXIT_FAILURE
+
+        # Count after de-duplication, not before. Saved listing pages overlap
+        # heavily - all twelve may hold the same links - so a running total
+        # across pages reports a figure many times the real one, which is
+        # alarming and useless.
+        seen: set[str] = set()
+        skipped: set[str] = set()
+        for page in pages:
+            for link in extract_release_links(page.read_text(encoding="utf-8", errors="replace")):
+                if link.filename in already or link.filename in seen:
+                    continue
+                if is_possibly_relevant(link.title):
+                    seen.add(link.filename)
+                    urls.append(link.url)
+                else:
+                    skipped.add(link.filename)
+        print(f"CIRCULARS - {len(pages)} saved listing page(s)")
+        print("=" * 72)
+        print(f"  {len(seen)} distinct relevant release(s), "
+              f"{len(skipped)} skipped as clearly unrelated, "
+              f"{len(already)} already held")
+
+    if args.sweep:
+        # UTC, not local time. The only consequence is which year the sweep
+        # ends at, and a deterministic answer is worth more than a timezone.
+        last = args.last_year or _datetime.now(_UTC).year
+        windows = semi_annual_windows(args.first_year, last)
+        swept = plan_sweep(windows, already_have=already)
+        urls = list(dict.fromkeys([*urls, *swept]))
+        print(f"CIRCULARS SWEEP - {args.first_year} to {last}")
+        print("=" * 72)
+        print(f"  {len(windows)} review windows, {len(swept)} base candidates")
+        print("  Suffixes (_1, _2, ...) are followed only on dates that hit.")
+
+    if args.limit is not None:
+        urls = urls[: args.limit]
+
+    print(f"  {len(urls)} URL(s) to try at {max(args.delay, 1.0):.1f}s each "
+          f"(~{len(urls) * max(args.delay, 1.0) / 60:.0f} min)")
+    if not args.fetch:
+        print()
+        print("DRY RUN - nothing downloaded. Add --fetch to proceed.")
+        for url in urls[:5]:
+            print(f"    {url}")
+        if len(urls) > 5:
+            print(f"    ... and {len(urls) - 5} more")
+        return EXIT_OK
+
+    config = CircularFetchConfig(
+        destination=destination, delay_seconds=args.delay, enabled=True
+    )
+    fetcher = UrlFetcher(delay_seconds=config.delay_seconds)
+
+    started = _time.monotonic()
+
+    def _report(done: int, total: int, saved: int, absent: int) -> None:
+        """Print progress. Silence for half an hour looks like a hang."""
+        if done % 10 and done != total:
+            return
+        elapsed = _time.monotonic() - started
+        rate = elapsed / max(done, 1)
+        remaining = (total - done) * rate
+        print(
+            f"  [{done:>4}/{total}]  saved {saved:<4} missing {absent:<4} "
+            f"~{remaining / 60:.0f} min left",
+            flush=True,
+        )
+
+    print()
+    print("  Downloading. Progress every 10 URLs; Ctrl-C is safe - files")
+    print("  already saved are skipped on the next run.")
+    written, missing = fetch_releases(urls, fetcher, config, progress=_report)
+    print()
+    print(f"  downloaded {len(written)}, {len(missing)} candidates returned nothing")
+    print(f"  destination: {destination}")
+    if args.sweep and not written:
+        print()
+        print("  No releases found. If the sweep windows are right this means")
+        print("  the files are already held; otherwise check --check on bhavcopy")
+        print("  to confirm niftyindices.com is reachable at all.")
+    return EXIT_OK
+
+
+def _parse_circulars(
+    destination: Path,
+    index_name: str,
+    parse_index_section: object,
+    read_release_pdf: object,
+    error_type: type[Exception],
+) -> int:
+    """Read downloaded releases and print the changes for one index."""
+    pdfs = sorted(destination.glob("ind_prs*.pdf")) if destination.exists() else []
+    if not pdfs:
+        print(f"No release PDFs in {destination}")
+        return EXIT_FAILURE
+
+    print(f"CIRCULARS PARSE - {index_name}")
+    print("=" * 72)
+    changes = []
+    no_section = 0
+    failures: list[tuple[str, str]] = []
+    for pdf in pdfs:
+        try:
+            text = read_release_pdf(pdf)  # type: ignore[operator]
+            change = parse_index_section(text, index_name, source=pdf.name)  # type: ignore[operator]
+        except error_type as exc:
+            message = str(exc)
+            if "no section heading" in message:
+                no_section += 1
+            else:
+                failures.append((pdf.name, message.split(".")[0]))
+            continue
+        changes.append(change)
+
+    for change in sorted(changes, key=lambda c: c.effective_from):
+        print(f"  {change.describe()}")
+
+    print()
+    print(f"  {len(pdfs)} PDF(s) read")
+    print(f"  {len(changes)} touched {index_name}")
+    print(f"  {no_section} did not mention it (normal - most releases do not)")
+    if failures:
+        print(f"  {len(failures)} could not be parsed:")
+        for name, reason in failures[:10]:
+            print(f"      {name}: {reason}")
+    net = sum(c.net_size_change for c in changes)
+    if changes and net != 0:
+        print()
+        print(f"  WARNING: net size change across all changes is {net:+d}, not 0.")
+        print("  For a fixed-size index that means a release is missing or")
+        print("  mis-parsed. Do not reconstruct membership until it is resolved.")
+    return EXIT_OK
+
+
 def _run_bhavcopy(settings: Settings, args: argparse.Namespace) -> int:
     """Plan, fetch or validate historical bhavcopy files."""
     from datetime import date as _date
@@ -643,6 +882,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_reference(settings)
     if args.command == "bhavcopy":
         return _run_bhavcopy(settings, args)
+    if args.command == "circulars":
+        return _run_circulars(settings, args)
 
     # argparse enforces `required=True`, so this is defensive only.
     print(f"Unknown command: {args.command}")

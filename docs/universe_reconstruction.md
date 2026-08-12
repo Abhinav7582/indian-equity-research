@@ -150,9 +150,18 @@ For each year 2015–2026:
 3. **File → Save Page As → Webpage, HTML Only**
 4. Save into `data/raw/circulars/listings/media_YYYY.html`
 
-Twelve saves, no judgement calls. `extract_release_links` then pulls every
-URL, date and title out of them, `is_possibly_relevant` filters, and the
-fetcher downloads. Nothing is guessed because the listing is authoritative.
+Then:
+
+```bash
+# See what would be downloaded. Touches nothing.
+uv run python -m indian_equity_research circulars --from-listings
+
+# Download.
+uv run python -m indian_equity_research circulars --from-listings --fetch
+```
+
+Twelve saves, no judgement calls. Nothing is guessed because the listing is
+authoritative.
 
 #### Route 2 — sweep the predictable dates
 
@@ -160,6 +169,17 @@ Release URLs are deterministic (`ind_prsDDMMYYYY.pdf`), and the semi-annual
 reviews are announced inside narrow windows: **15 Feb – 5 Mar** and
 **5 Aug – 5 Sep**. `plan_sweep` generates **439 candidate URLs** for 2015–2026
 — about fifteen minutes at the two-second default.
+
+```bash
+# Plan only.
+uv run python -m indian_equity_research circulars --sweep
+
+# Cautious first run.
+uv run python -m indian_equity_research circulars --sweep --fetch --limit 20
+
+# The rest.
+uv run python -m indian_equity_research circulars --sweep --fetch
+```
 
 Same-day variants (`_1`, `_2`, …) are *not* planned. They are followed only on
 dates that actually produced a release, which keeps the request count down and
@@ -178,9 +198,16 @@ Expect roughly **24 semi-annual releases plus 10–20 interim ones**.
 
 ### Step 3 — parse
 
-`indian_equity_research.market.index_changes` extracts the exclusion and
-inclusion tables from the release text. It is tested against a fixture taken
-verbatim from the August 2025 release.
+```bash
+uv run python -m indian_equity_research circulars --parse
+```
+
+Reads every downloaded PDF, extracts the Nifty 100 section, and prints one line
+per change. It also checks that the net size change across all releases is zero
+— for a fixed-size index anything else means a release is missing or
+mis-parsed, and it says so rather than proceeding.
+
+Use `--index "Nifty 50"` to extract a different index.
 
 ### Step 4 — walk backwards
 

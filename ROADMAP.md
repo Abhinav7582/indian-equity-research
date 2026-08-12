@@ -158,6 +158,11 @@ only from the semi-annual ones drifts. The size self-check in
 ``reconstruct_membership`` catches this by refusing to return a membership that
 is not exactly 100.
 
+**Status 2026-08-12:** 1,037 releases downloaded, 28 Nifty 100 changes parsed,
+**net size change exactly zero**. Fifteen files need reading by eye and three
+coverage gaps remain (2016 entirely, 2020-H2, 2021-H2). See
+[`docs/circulars_worklist.md`](docs/circulars_worklist.md).
+
 **If some releases cannot be found, that is a finding to report — not a licence
 to substitute the proxy.** A5, clause 4.
 

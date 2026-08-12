@@ -395,3 +395,84 @@ def test_describe_is_human_checkable() -> None:
     assert "2025-09-30" in text
     assert "DABUR" in text
     assert "HINDZINC" in text
+
+
+# --------------------------------------------------------------------------
+# PDF layout defects that produce plausible, wrong answers
+# --------------------------------------------------------------------------
+
+# Verbatim from ind_prs01102010.pdf, whose tables are laid out away from their
+# headings. Extraction emits every heading first, then every table body.
+DETACHED_2010 = """The Committee has decided to make the following changes
+which will become effective from October 7, 2010:
+1) CNX Nifty Junior
+The following companies are being excluded :
+The following companies are being included:
+2) CNX 100 Index
+The following companies are being excluded :
+The following companies are being included:
+Sr. No. Company Name  Symbol
+1 Zee Entertainment Enterprises Ltd. ZEEL
+2 Reliance Natural Resources Ltd. RNRL
+Sr. No. Company Name  Symbol
+1 Exide Industries Ltd. EXIDEIND
+2 Tata Chemicals Ltd. TATACHEM
+"""
+
+
+def test_a_heading_with_no_rows_beneath_it_is_refused() -> None:
+    """Regression test for the most dangerous failure seen in this archive.
+
+    Parsed naively this release returns "0 excluded, 4 included" -- which for
+    a fixed-size index is impossible, and which silently mislabels the excluded
+    set as the included one. It looked entirely plausible and was caught only
+    because the net size change across all releases came out non-zero.
+
+    Refusing here means the error surfaces on the release that caused it.
+    """
+    with pytest.raises(IndexChangeError, match="followed by no table rows"):
+        parse_index_section(DETACHED_2010, "Nifty 100")
+
+
+def test_the_refusal_names_the_cause_not_just_the_symptom() -> None:
+    try:
+        parse_index_section(DETACHED_2010, "Nifty 100")
+    except IndexChangeError as exc:
+        message = str(exc)
+    assert "laid its tables out away from their" in message
+    assert "by hand" in message, "the reader needs to know what to do next"
+
+
+def test_a_genuinely_one_sided_change_still_parses() -> None:
+    """The guard must not reject the legitimate case it resembles.
+
+    Here the *included* marker is absent entirely rather than present and
+    empty, which is how NSE writes a removal with no replacement.
+    """
+    text = (
+        "These changes shall become effective from September 28, 2015.\n"
+        "8) CNX Infrastructure Index\n"
+        "The following company is being excluded and no inclusion shall be made:\n"
+        "Sr. No. Company Name Symbol\n"
+        "1 Crompton Greaves Ltd. CROMPGREAV\n"
+    )
+    change = parse_index_section(text, "CNX Infrastructure")
+    assert change.excluded == ("CROMPGREAV",)
+    assert change.included == ()
+
+
+def test_alternate_effective_date_phrasings_all_parse() -> None:
+    """Parse every effective-date wording NSE has used.
+
+    At least four across 1998-2026, and PDF extraction splits words
+    mid-letter. Between them these were worth 148 unparseable releases.
+    """
+    cases = {
+        "shall become effective from September 30, 2025": dt.date(2025, 9, 30),
+        "w.e.f. September 22, 2006:": dt.date(2006, 9, 22),
+        "shall become eff ective from March 28, 2014": dt.date(2014, 3, 28),
+        "with effect from Ju ne 10, 2013": dt.date(2013, 6, 10),
+        "effective date of the above changes would be October 22, 2009": dt.date(2009, 10, 22),
+    }
+    for text, expected in cases.items():
+        assert extract_effective_date(text) == expected, text

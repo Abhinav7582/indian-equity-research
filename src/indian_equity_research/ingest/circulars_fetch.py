@@ -39,7 +39,7 @@ sweep is windowed rather than exhaustive.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -317,6 +317,7 @@ def fetch_releases(
     *,
     follow_suffixes: bool = True,
     suffix_limit: int = 9,
+    progress: Callable[[int, int, int, int], None] | None = None,
 ) -> tuple[list[Path], list[str]]:
     """Download ``urls`` that look like real releases.
 
@@ -332,6 +333,10 @@ def fetch_releases(
             only on dates that already produced something.
         suffix_limit: Safety stop, so a server returning a valid PDF for every
             suffix cannot cause an unbounded loop.
+        progress: Called as ``(done, total, written, missing)`` after each base
+            URL. A run of several hundred URLs at a two-second delay takes tens
+            of minutes, and a process that prints nothing for half an hour is
+            indistinguishable from one that has hung. Supply this.
 
     Returns:
         ``(written, missing)`` -- paths saved, and URLs that returned nothing
@@ -344,14 +349,15 @@ def fetch_releases(
         return written, urls
 
     config.destination.mkdir(parents=True, exist_ok=True)
-    for url in urls:
+    for index, url in enumerate(urls, start=1):
         saved = _try_one(url, fetcher, config, written, missing)
-        if not (saved and follow_suffixes):
-            continue
-        for suffix in range(1, suffix_limit + 1):
-            variant = url.replace(".pdf", f"_{suffix}.pdf")
-            if not _try_one(variant, fetcher, config, written, missing):
-                break
+        if saved and follow_suffixes:
+            for suffix in range(1, suffix_limit + 1):
+                variant = url.replace(".pdf", f"_{suffix}.pdf")
+                if not _try_one(variant, fetcher, config, written, missing):
+                    break
+        if progress is not None:
+            progress(index, len(urls), len(written), len(missing))
     return written, missing
 
 

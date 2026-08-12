@@ -34,6 +34,9 @@ dependencies = [
     "sqlalchemy>=2.0.36,<3",
     # PostgreSQL driver. psycopg 3 is the supported driver for SQLAlchemy 2.x.
     "psycopg[binary]>=3.2,<4",
+    # Text extraction from NSE index-change press releases. Pure Python, no
+    # system libraries, and read-only: it never renders or executes anything.
+    "pypdf>=5.1,<7",
 ]
 
 # The CLI is intentionally built on argparse (standard library) rather than

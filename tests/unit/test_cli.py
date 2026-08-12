@@ -39,6 +39,12 @@ class TestParser:
         which is why `test_no_broker_dependency_anywhere` below is the real
         boundary and this assertion is the tripwire that forces a reviewer to
         look.
+
+        Later additions, each of which tripped this assertion deliberately:
+        `bhavcopy` (Phase 2d, downloads exchange files) and `circulars`
+        (Phase 3a, downloads NSE index-change press releases and reads them).
+        Both are read-only against public documents and write only into the
+        git-ignored data directory.
         """
         assert set(COMMANDS) == {
             "version",
@@ -48,6 +54,7 @@ class TestParser:
             "archive",
             "reference",
             "bhavcopy",
+            "circulars",
         }
 
     def test_every_declared_command_is_registered(self) -> None:
@@ -168,3 +175,74 @@ class TestDbHealthCommand:
         captured = capsys.readouterr()
         assert secret not in captured.out
         assert secret not in captured.err
+
+
+class TestCircularsCommand:
+    """The circulars command downloads public documents and reads them.
+
+    It writes only into the git-ignored data directory and places no order.
+    These tests pin the behaviour that keeps it safe: a dry run by default,
+    and clear guidance rather than a stack trace when inputs are absent.
+
+    Every test that touches the filesystem is pointed at an empty temporary
+    directory. An earlier version read the real ``data/`` tree and passed only
+    because it happened to be empty; the moment real files landed, three tests
+    failed for reasons that had nothing to do with the code. A suite whose
+    result depends on the developer's local data is not a suite.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolated_data_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Point every setting at an empty tree, never the real one."""
+        monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("RAW_DIR", str(tmp_path / "raw"))
+        monkeypatch.setenv("INTERIM_DIR", str(tmp_path / "interim"))
+        monkeypatch.setenv("PROCESSED_DIR", str(tmp_path / "processed"))
+        monkeypatch.setenv("REFERENCE_DIR", str(tmp_path / "reference"))
+
+    def test_the_command_is_registered_with_its_flags(self) -> None:
+        args = build_parser().parse_args(
+            ["circulars", "--sweep", "--first-year", "2020", "--last-year", "2021"]
+        )
+        assert args.command == "circulars"
+        assert args.sweep is True
+        assert args.first_year == 2020
+        assert args.last_year == 2021
+        assert args.fetch is False, "fetching must be opt-in"
+
+    def test_fetch_defaults_to_off(self) -> None:
+        """The single most important default here."""
+        args = build_parser().parse_args(["circulars", "--sweep"])
+        assert args.fetch is False
+
+    def test_no_mode_selected_fails_with_guidance(self, capsys) -> None:  # type: ignore[no-untyped-def]
+        assert main(["circulars"]) == EXIT_FAILURE
+        out = capsys.readouterr().out
+        assert "--from-listings" in out
+        assert "--sweep" in out
+        assert "--parse" in out
+
+    def test_missing_listings_explains_why_and_how(self, capsys) -> None:  # type: ignore[no-untyped-def]
+        assert main(["circulars", "--from-listings"]) == EXIT_FAILURE
+        out = capsys.readouterr().out
+        assert "Save Page As" in out
+        assert "runs in the browser" in out, "the reason must be stated, not just the remedy"
+
+    def test_sweep_dry_run_downloads_nothing_and_succeeds(self, capsys) -> None:  # type: ignore[no-untyped-def]
+        assert main(["circulars", "--sweep", "--limit", "3"]) == EXIT_OK
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+        assert "nothing downloaded" in out
+        assert "ind_prs" in out
+
+    def test_sweep_reports_the_time_cost_before_committing_to_it(self, capsys) -> None:  # type: ignore[no-untyped-def]
+        main(["circulars", "--sweep"])
+        out = capsys.readouterr().out
+        assert "base candidates" in out
+        assert "min)" in out, "the user should see the time cost before running it"
+
+    def test_parse_with_nothing_downloaded_fails_cleanly(self, capsys) -> None:  # type: ignore[no-untyped-def]
+        assert main(["circulars", "--parse"]) == EXIT_FAILURE
+        assert "No release PDFs" in capsys.readouterr().out

@@ -55,14 +55,66 @@ _MONTHS: Final = frozenset({
     "July", "August", "September", "October", "November", "December",
 })
 
-# "These changes shall become effective from September 30, 2025"
+
+def _spaced(literal: str) -> str:
+    """Regex for ``literal`` tolerating spaces inserted between its characters.
+
+    PDF text extraction routinely breaks words apart where the document used
+    letter-spacing for layout. Real examples from this archive:
+
+        "shall become eff ective from"
+        "with effect from Ju ne 10, 2013"
+
+    A regex written against the words as a human reads them misses both. This
+    was worth 263 unparseable releases out of 1,037 before it was handled.
+    """
+    return r"\s*".join(re.escape(char) for char in literal if not char.isspace())
+
+
+_MONTH_NAMES: Final = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
+# Every phrasing observed across 1998-2026. NSE has used at least four:
+#
+#   "shall become effective from September 30, 2025"
+#   "w.e.f. September 22, 2006"
+#   "with effect from June 10, 2013"
+#   "effective date of the above changes would be October 22, 2009"
 _EFFECTIVE_RE: Final = re.compile(
-    r"effective\s+from\s+([A-Z][a-z]+)\s+(\d{1,2}),?\s+(\d{4})", re.IGNORECASE
+    "(?:"
+    + "|".join(
+        _spaced(phrase)
+        for phrase in ("effective from", "w.e.f.", "w.e.f", "with effect from", "would be")
+    )
+    + r")\s*(?:"
+    + "|".join(_spaced(month) for month in _MONTH_NAMES)
+    + r")\s*\d{1,2}\s*,?\s*\d{4}",
+    re.IGNORECASE,
+)
+_DATE_PARTS_RE: Final = re.compile(
+    r"((?:"
+    + "|".join(_spaced(month) for month in _MONTH_NAMES)
+    + r"))\s*(\d{1,2})\s*,?\s*(\d{4})",
+    re.IGNORECASE,
 )
 
 # A table row: "1 Dabur India Ltd. DABUR". The symbol is the trailing token;
 # NSE symbols are upper case and may contain digits, & and -.
 _ROW_RE: Final = re.compile(r"^\s*\d+\s+(.+?)\s+([A-Z0-9&\-]{2,})\s*$")
+
+# Section numbering is not consistent across the archive. All of these are real
+# headings for the same index:
+#
+#     3) Nifty 100          (current)
+#     (3) CNX 100 Index     (2013-2014, parenthesised)
+#     d) Nifty 100          (2024, lettered once a release runs past nine)
+#
+# Requiring a bare "3)" missed 103 of 1,037 releases. Each looked exactly like
+# a release that simply did not touch the index, which is a different and wrong
+# conclusion -- and a silent one.
+_SECTION_NUMBER: Final = r"\(?\s*(?:\d{1,2}|[A-Za-z])\s*\)"
 
 _EXCLUDED_RE: Final = re.compile(r"following\s+compan(?:y|ies)\s+(?:is|are)\s+being\s+excluded")
 _INCLUDED_RE: Final = re.compile(r"following\s+compan(?:y|ies)\s+(?:is|are)\s+being\s+included")
@@ -176,13 +228,20 @@ def extract_effective_date(text: str) -> date:
     match = _EFFECTIVE_RE.search(text)
     if not match:
         raise IndexChangeError(
-            "no effective date found in the release text. It is stated as "
-            "'effective from <Month> <D>, <YYYY>' and is roughly five weeks "
-            "after the announcement date in the filename. It must not be "
-            "guessed: a change placed a month out corrupts every backtest "
-            "that spans it."
+            "no effective date found in the release text. NSE has used at "
+            "least four phrasings ('effective from', 'w.e.f.', 'with effect "
+            "from', 'would be'), and PDF extraction sometimes splits words "
+            "mid-letter. All are handled; if this still fails the document is "
+            "probably a scan. The date must not be guessed: it is roughly five "
+            "weeks after the announcement date in the filename, and a change "
+            "placed a month out corrupts every backtest that spans it."
         )
-    month_name, day, year = match.group(1).title(), match.group(2), match.group(3)
+    parts = _DATE_PARTS_RE.search(match.group(0))
+    if not parts:  # pragma: no cover - the outer pattern guarantees this matches
+        raise IndexChangeError(f"could not split {match.group(0)!r} into a date")
+
+    month_name = re.sub(r"\s+", "", parts.group(1)).title()
+    day, year = parts.group(2), parts.group(3)
     if month_name not in _MONTHS:
         raise IndexChangeError(f"unrecognised month {month_name!r} in effective date")
     # A date, not a timestamp: an index reconstitution has no time of day.
@@ -217,6 +276,35 @@ def parse_index_section(
     excluded = _rows_after(section, _EXCLUDED_RE)
     included = _rows_after(section, _INCLUDED_RE)
 
+    # A heading that announces a table and is followed by no rows means the
+    # PDF laid its tables out away from their headings, and extraction has
+    # emitted them detached. Real example, ind_prs01102010.pdf:
+    #
+    #     2) CNX 100 Index
+    #     The following companies are being excluded :     <- no rows
+    #     The following companies are being included:      <- no rows
+    #     Sr. No. Company Name Symbol
+    #     1 Zee Entertainment Enterprises Ltd. ZEEL        <- the EXCLUDED set
+    #
+    # Parsed naively this returns "0 out, 4 in" -- plausible, and wrong in both
+    # directions at once. It was caught only because a fixed-size index cannot
+    # gain four members, so refuse here rather than rely on that downstream.
+    #
+    # A genuinely one-sided change reads "excluded and no inclusion shall be
+    # made", where the *included* marker is absent entirely rather than present
+    # and empty. That case still parses.
+    for marker, rows, label in (
+        (_EXCLUDED_RE, excluded, "exclusion"),
+        (_INCLUDED_RE, included, "inclusion"),
+    ):
+        if marker.search(section) and not rows:
+            raise IndexChangeError(
+                f"the {label} heading for {index_name!r} is followed by no table "
+                f"rows. The PDF has laid its tables out away from their "
+                f"headings, so which symbols belong to which side cannot be "
+                f"determined from the extracted text. Read this release by hand."
+            )
+
     if not excluded and not included:
         raise IndexChangeError(
             f"found a section for {index_name!r} but no exclusion or inclusion "
@@ -248,14 +336,16 @@ def _isolate_section(text: str, index_name: str) -> str:
     """
     candidates = INDEX_ALIASES.get(index_name, (index_name,))
     for alias in candidates:
+        # "Nifty 100" must also match a heading written "Nifty100".
+        flexible = re.escape(alias).replace(r"\ ", r"\s*")
         heading = re.compile(
-            rf"^\s*\d+\)\s*{re.escape(alias)}(?:\s+Index)?\s*$",
+            rf"^\s*{_SECTION_NUMBER}\s*{flexible}(?:\s+Index)?\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
         match = heading.search(text)
         if match:
             start = match.end()
-            following = re.compile(r"^\s*\d+\)\s*\S", re.MULTILINE).search(text, start)
+            following = re.compile(rf"^\s*{_SECTION_NUMBER}\s*\S", re.MULTILINE).search(text, start)
             end = following.start() if following else len(text)
             return text[start:end]
 
