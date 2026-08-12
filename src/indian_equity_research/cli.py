@@ -498,8 +498,9 @@ def _run_circulars(settings: Settings, args: argparse.Namespace) -> int:
     listings_dir = destination / "listings"
 
     if args.parse:
-        return _parse_circulars(destination, args.index, parse_index_section, read_release_pdf,
-                                IndexChangeError)
+        return _parse_circulars(
+            destination, args.index, parse_index_section, read_release_pdf, IndexChangeError
+        )
 
     if not (args.from_listings or args.sweep):
         print("Specify --from-listings, --sweep, or --parse.")
@@ -546,9 +547,11 @@ def _run_circulars(settings: Settings, args: argparse.Namespace) -> int:
                     skipped.add(link.filename)
         print(f"CIRCULARS - {len(pages)} saved listing page(s)")
         print("=" * 72)
-        print(f"  {len(seen)} distinct relevant release(s), "
-              f"{len(skipped)} skipped as clearly unrelated, "
-              f"{len(already)} already held")
+        print(
+            f"  {len(seen)} distinct relevant release(s), "
+            f"{len(skipped)} skipped as clearly unrelated, "
+            f"{len(already)} already held"
+        )
 
     if args.sweep:
         # UTC, not local time. The only consequence is which year the sweep
@@ -565,8 +568,10 @@ def _run_circulars(settings: Settings, args: argparse.Namespace) -> int:
     if args.limit is not None:
         urls = urls[: args.limit]
 
-    print(f"  {len(urls)} URL(s) to try at {max(args.delay, 1.0):.1f}s each "
-          f"(~{len(urls) * max(args.delay, 1.0) / 60:.0f} min)")
+    print(
+        f"  {len(urls)} URL(s) to try at {max(args.delay, 1.0):.1f}s each "
+        f"(~{len(urls) * max(args.delay, 1.0) / 60:.0f} min)"
+    )
     if not args.fetch:
         print()
         print("DRY RUN - nothing downloaded. Add --fetch to proceed.")
@@ -576,9 +581,7 @@ def _run_circulars(settings: Settings, args: argparse.Namespace) -> int:
             print(f"    ... and {len(urls) - 5} more")
         return EXIT_OK
 
-    config = CircularFetchConfig(
-        destination=destination, delay_seconds=args.delay, enabled=True
-    )
+    config = CircularFetchConfig(destination=destination, delay_seconds=args.delay, enabled=True)
     fetcher = UrlFetcher(delay_seconds=config.delay_seconds)
 
     started = _time.monotonic()

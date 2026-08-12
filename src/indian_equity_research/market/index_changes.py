@@ -42,18 +42,37 @@ from pathlib import Path
 from typing import Final
 
 __all__ = [
+    "DEFERRED_RELEASES",
+    "MANUAL_REGISTER_PATH",
     "IndexChange",
     "IndexChangeError",
+    "ManualRegister",
+    "drop_deferred",
     "extract_effective_date",
+    "load_manual_register",
+    "parse_index_list_exclusion",
     "parse_index_section",
+    "parse_release",
     "read_release_pdf",
     "reconstruct_membership",
 ]
 
-_MONTHS: Final = frozenset({
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-})
+_MONTHS: Final = frozenset(
+    {
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    }
+)
 
 
 def _spaced(literal: str) -> str:
@@ -72,8 +91,18 @@ def _spaced(literal: str) -> str:
 
 
 _MONTH_NAMES: Final = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ]
 
 # Every phrasing observed across 1998-2026. NSE has used at least four:
@@ -94,9 +123,7 @@ _EFFECTIVE_RE: Final = re.compile(
     re.IGNORECASE,
 )
 _DATE_PARTS_RE: Final = re.compile(
-    r"((?:"
-    + "|".join(_spaced(month) for month in _MONTH_NAMES)
-    + r"))\s*(\d{1,2})\s*,?\s*(\d{4})",
+    r"((?:" + "|".join(_spaced(month) for month in _MONTH_NAMES) + r"))\s*(\d{1,2})\s*,?\s*(\d{4})",
     re.IGNORECASE,
 )
 
@@ -477,3 +504,425 @@ def reconstruct_membership(
             f"reviews. Report the gap; do not pad the list."
         )
     return members
+
+
+# ---------------------------------------------------------------------------
+# Announced, then withdrawn
+# ---------------------------------------------------------------------------
+#
+# A release can announce a reconstitution that never happens. In March 2020 NSE
+# deferred one "until further notice" and replaced it three months later:
+#
+#   18 Feb 2020  semi-annual review, to take effect 27 March 2020
+#   16 Mar 2020  YES BANK removed early, effective 19 March -- this DID happen
+#   23 Mar 2020  "Deferment of Index Rebalancing" -- the 27 March rebalancing is
+#                deferred, citing circuit breakers, margins and travel curbs
+#   25 Mar 2020  the SEBI-concentration changes deferred too, citing the lockdown
+#   13 May 2020  revised plan announced
+#   10 Jun 2020  the replacements that actually happened, effective 26 June
+#
+# Parsing alone cannot see this. The February release is a normal, well-formed
+# document announcing changes on a stated date; nothing inside it says it was
+# withdrawn. Applying both it and the June release removes five companies twice
+# and leaves the membership wrong from March to June 2020.
+#
+# The giveaway, had it not been documented: ADANITRANS is an *inclusion* in both
+# the deferred February release and the 16 March one that took effect. A company
+# cannot join an index it is already in, which is why `IndexChange` rejects a
+# symbol appearing on both sides and why `reconstruct_membership` checks size.
+#
+# Only the mapping is recorded here -- which release withdrew which. That is
+# NSE's editorial history, not its constituent data, so unlike the membership
+# lists it can live in version control.
+
+DEFERRED_RELEASES: Final[dict[str, str]] = {
+    "ind_prs18022020.pdf": "ind_prs23032020.pdf",
+    "ind_prs12032020.pdf": "ind_prs23032020.pdf",
+    "ind_prs19032020.pdf": "ind_prs23032020.pdf",
+}
+
+
+def drop_deferred(changes: list[IndexChange]) -> list[IndexChange]:
+    """Remove changes from releases NSE later withdrew.
+
+    Args:
+        changes: Parsed changes, from any mixture of releases.
+
+    Returns:
+        Only the changes that actually took effect, in the order given.
+
+    Raises:
+        IndexChangeError: if a change carries no ``source``. A change that
+            cannot be attributed to a release cannot be checked against the
+            deferral list, and silently keeping it would reintroduce exactly the
+            error this function exists to prevent.
+    """
+    kept: list[IndexChange] = []
+    for change in changes:
+        if not change.source:
+            raise IndexChangeError(
+                f"{change.describe()} has no source release, so it cannot be "
+                f"checked against the deferral list. Pass source= when parsing."
+            )
+        if change.source not in DEFERRED_RELEASES:
+            kept.append(change)
+    return kept
+
+
+# ---------------------------------------------------------------------------
+# The second release format: one security, many indices
+# ---------------------------------------------------------------------------
+#
+# When a security is cancelled, merged away or delisted, NSE does not write a
+# per-index section. It writes one paragraph naming the security, then a table
+# of the *index names* it drops out of:
+#
+#     Tata Motors Ltd., 'A' Ordinary Shares - DVR (Symbol: TATAMTRDVR) shall be
+#     excluded from the following indices:
+#
+#     Sr. No.  Index Name
+#     1        Nifty 100
+#     ...
+#     11       Nifty100 Equal Weight
+#
+# There is no "3) Nifty 100" heading anywhere, so `parse_index_section` reports
+# that the release does not touch the index -- confidently, and wrongly.
+#
+# Exactly one release in the 2015-2026 archive uses this shape
+# (`ind_prs23082024_1.pdf`, the Tata Motors DVR cancellation). It was found
+# because the reconstructed index gained a net member over twelve years and a
+# fixed-size index cannot do that. One release in 1,037 is easy to dismiss as
+# not worth parsing; it is worth parsing precisely because it is rare enough to
+# be missed and structural enough to recur at the next cancellation.
+#
+# Note rows 1 and 11 above. The same prefix trap as the section headings, in a
+# different guise, which is why row matching is exact rather than by prefix.
+
+_INDEX_LIST_RE: Final = re.compile(
+    r"\(\s*Symbols?\s*:\s*(?P<symbols>[^)]{1,120}?)\s*\)"
+    r"[^()]{0,160}?"
+    r"(?:shall|will|would)\s+be\s+(?P<verb>excluded|included|removed|added)\s+"
+    r"(?:from|in|to)\s+the\s+following\s+indices\s*:",
+    re.IGNORECASE | re.DOTALL,
+)
+_INDEX_ROW_RE: Final = re.compile(r"^\s*(\d{1,2})[.)]?\s+(?P<name>\S.*?)\s*$")
+_INDEX_LIST_HEADER_RE: Final = re.compile(r"^\s*Sr\.?\s*No\.?\s+Index\s+Name\s*$", re.IGNORECASE)
+
+
+def _normalise_index_name(name: str) -> str:
+    """Collapse an index name to a form safe to compare for equality.
+
+    Case and internal spacing vary ("Nifty 100", "NIFTY100", "Nifty 100 Index"),
+    but the *words* do not. Everything else must survive: "Nifty100 Equal
+    Weight" has to stay distinguishable from "Nifty 100".
+    """
+    stripped = re.sub(r"\s+index\s*$", "", name.strip(), flags=re.IGNORECASE)
+    return re.sub(r"\s+", "", stripped).casefold()
+
+
+def parse_index_list_exclusion(
+    text: str,
+    index_name: str,
+    *,
+    announced_on: date | None = None,
+    source: str = "",
+) -> IndexChange:
+    """Extract a one-security change from a release that lists indices, not stocks.
+
+    Args:
+        text: Full text of the release.
+        index_name: The index wanted, e.g. ``"Nifty 100"``.
+        announced_on: Publication date, carried through for the audit trail.
+        source: Filename, carried through for the audit trail.
+
+    Returns:
+        The change, with the named security on one side and nothing on the other.
+
+    Raises:
+        IndexChangeError: if the release does not use this format, or does not
+            name this index. Both are ordinary outcomes for most releases.
+    """
+    aliases = {_normalise_index_name(a) for a in INDEX_ALIASES.get(index_name, (index_name,))}
+    for match in _INDEX_LIST_RE.finditer(text):
+        symbols = tuple(
+            s.strip().upper() for s in re.split(r"[,;]", match.group("symbols")) if s.strip()
+        )
+        if not symbols:
+            continue
+
+        listed: list[str] = []
+        started = False
+        for line in text[match.end() :].splitlines():
+            if not line.strip() or _INDEX_LIST_HEADER_RE.match(line):
+                continue
+            row = _INDEX_ROW_RE.match(line)
+            if row is None:
+                if started:
+                    break
+                continue
+            started = True
+            listed.append(_normalise_index_name(row.group("name")))
+
+        if not listed:
+            raise IndexChangeError(
+                f"{source or 'release'} announces that {', '.join(symbols)} leaves "
+                f"'the following indices' but no index table followed. The table has "
+                f"probably been detached by PDF extraction. Reporting 'not affected' "
+                f"here would silently keep a cancelled security in the index."
+            )
+        if not aliases & set(listed):
+            continue
+
+        removing = match.group("verb").lower() in {"excluded", "removed"}
+        return IndexChange(
+            index_name=index_name,
+            effective_from=extract_effective_date(text),
+            announced_on=announced_on,
+            excluded=symbols if removing else (),
+            included=() if removing else symbols,
+            source=source,
+        )
+
+    raise IndexChangeError(
+        f"no 'excluded from the following indices' block naming {index_name!r} was "
+        f"found. This is the format NSE uses for a cancellation, merger or "
+        f"delisting; most releases do not use it."
+    )
+
+
+def parse_release(
+    text: str,
+    index_name: str,
+    *,
+    announced_on: date | None = None,
+    source: str = "",
+) -> IndexChange:
+    """Extract this index's changes from a release in either published format.
+
+    Tries the per-index section first, then the one-security index-list form.
+    Callers should prefer this to either parser alone: the section format covers
+    the semi-annual reviews, and the list format covers the corporate actions
+    between them.
+
+    Raises:
+        IndexChangeError: if neither format yields a change for this index --
+            the ordinary outcome for a release about other indices.
+    """
+    try:
+        return parse_index_section(text, index_name, announced_on=announced_on, source=source)
+    except IndexChangeError as section_error:
+        try:
+            return parse_index_list_exclusion(
+                text, index_name, announced_on=announced_on, source=source
+            )
+        except IndexChangeError as list_error:
+            raise IndexChangeError(
+                f"{source or 'release'} has no changes for {index_name!r} in either "
+                f"published format.\n  as a section: {section_error}\n"
+                f"  as an index list: {list_error}"
+            ) from section_error
+
+
+# ---------------------------------------------------------------------------
+# Releases that only a human can read
+# ---------------------------------------------------------------------------
+#
+# A minority of NSE releases are scans with no text layer. `read_release_pdf`
+# refuses them rather than reporting "no changes", so they have to be read by
+# eye (or OCR'd and then confirmed by eye) and the result written down.
+#
+# Why the answers are not committed to this repository
+# ----------------------------------------------------
+# `docs/data_sources.md` records that NSE prohibits redistribution outside a
+# licensing agreement, and this project's rule is "never redistribute". A
+# membership list transcribed from a release is still NSE's data. So the file
+# read below lives under `data/`, which is git-ignored, and a clean clone finds
+# it missing.
+#
+# That is deliberate. The alternative -- silently proceeding without the
+# hand-read releases -- would produce a membership history that is wrong only
+# during the periods nobody could parse, which is the hardest kind of error to
+# notice. Missing file, loud failure, documented remedy.
+
+MANUAL_REGISTER_PATH: Final = Path("data/reference/index_changes_manual.md")
+
+_MANUAL_COLUMNS: Final = ("source", "index", "effective_from", "excluded", "included", "evidence")
+_NO_CHANGE: Final = "no change"
+_SYMBOL_RE: Final = re.compile(r"^[A-Z0-9&_.-]{1,20}$")
+
+
+@dataclass(frozen=True, slots=True)
+class ManualRegister:
+    """Hand-verified readings of releases no parser could handle.
+
+    ``no_change`` matters as much as ``changes``. A release recorded as leaving
+    the index alone has been read and dismissed; one that is simply absent has
+    not been read at all. Collapsing the two would let an unread reconstitution
+    pass as a considered decision.
+    """
+
+    changes: tuple[IndexChange, ...]
+    no_change: tuple[tuple[str, str], ...]
+    source_path: Path
+
+    def describe(self) -> str:
+        """One line summarising what the human contributed."""
+        return (
+            f"{self.source_path}: {len(self.changes)} hand-read change(s), "
+            f"{len(self.no_change)} release(s) read and found not to touch the index"
+        )
+
+
+def _split_symbols(cell: str, *, line_number: int, column: str) -> tuple[str, ...]:
+    """Parse a comma-separated symbol cell, rejecting anything unlike a symbol.
+
+    Raises:
+        IndexChangeError: on a malformed symbol. OCR turns ``MRF`` into ``MRE``
+            and drops characters entirely; a shape check will not catch a
+            plausible misreading, but it does catch the obvious damage.
+    """
+    if not cell.strip():
+        return ()
+    symbols = tuple(part.strip().upper() for part in cell.split(",") if part.strip())
+    for symbol in symbols:
+        if not _SYMBOL_RE.match(symbol):
+            raise IndexChangeError(
+                f"line {line_number}: {symbol!r} in the {column!r} column does not look "
+                f"like an NSE symbol. Symbols are upper-case and unspaced, e.g. "
+                f"BANKBARODA. Company names belong in the release, not in this file."
+            )
+    if len(set(symbols)) != len(symbols):
+        duplicates = sorted({s for s in symbols if symbols.count(s) > 1})
+        raise IndexChangeError(f"line {line_number}: {duplicates} listed twice in {column!r}")
+    return symbols
+
+
+def _parse_manual_row(cells: list[str], line_number: int) -> tuple[IndexChange | None, str, str]:
+    """Turn one table row into a change, or into a no-change record.
+
+    Returns:
+        ``(change_or_None, source, evidence)``.
+    """
+    row = dict(zip(_MANUAL_COLUMNS, cells, strict=True))
+    source, evidence = row["source"].strip(), row["evidence"].strip()
+    if not source:
+        raise IndexChangeError(f"line {line_number}: the 'source' column is empty")
+    if not evidence:
+        raise IndexChangeError(
+            f"line {line_number}: the 'evidence' column is empty. Record how the "
+            f"release was read -- an unattributed reading cannot be re-checked."
+        )
+
+    excluded = _split_symbols(row["excluded"], line_number=line_number, column="excluded")
+    included = _split_symbols(row["included"], line_number=line_number, column="included")
+    stated = row["effective_from"].strip().lower()
+
+    if stated in {_NO_CHANGE, "none", "-"}:
+        if excluded or included:
+            raise IndexChangeError(
+                f"line {line_number}: recorded as '{_NO_CHANGE}' but lists symbols. "
+                f"One of the two is wrong."
+            )
+        return None, source, evidence
+
+    if not (excluded or included):
+        raise IndexChangeError(
+            f"line {line_number}: an effective date is given but no symbols. If the "
+            f"release leaves the index alone, write '{_NO_CHANGE}' in the "
+            f"'effective_from' column so it is unambiguous."
+        )
+    try:
+        effective = datetime.strptime(stated, "%Y-%m-%d").replace(tzinfo=UTC).date()
+    except ValueError as exc:
+        raise IndexChangeError(
+            f"line {line_number}: {row['effective_from']!r} is not a date in "
+            f"YYYY-MM-DD form. Copy the date stated in the release text, not the "
+            f"one in the filename -- they differ by about five weeks."
+        ) from exc
+
+    change = IndexChange(
+        index_name=row["index"].strip(),
+        effective_from=effective,
+        announced_on=None,
+        excluded=excluded,
+        included=included,
+        source=source,
+    )
+    return change, source, evidence
+
+
+def load_manual_register(
+    path: Path | None = None,
+    *,
+    index_name: str | None = None,
+) -> ManualRegister:
+    """Load hand-verified index changes from the git-ignored register.
+
+    The file is a markdown table with the columns named in ``_MANUAL_COLUMNS``.
+    Anything outside the table -- headings, prose, the notes explaining a
+    judgement call -- is ignored, so the file can be written for a human first.
+
+    Args:
+        path: The register. Defaults to :data:`MANUAL_REGISTER_PATH`.
+        index_name: If given, keep only rows for this index.
+
+    Returns:
+        The parsed register.
+
+    Raises:
+        IndexChangeError: if the file is missing, or any row is malformed. Both
+            are refusals rather than warnings: a partially-read register would
+            produce a membership history wrong only where nobody was looking.
+    """
+    target = path or MANUAL_REGISTER_PATH
+    if not target.exists():
+        raise IndexChangeError(
+            f"{target} does not exist. Some NSE releases are scans with no text "
+            f"layer and cannot be parsed; their contents must be read by eye and "
+            f"recorded there. The file is git-ignored because NSE prohibits "
+            f"redistribution, so a fresh clone will always need it rebuilt -- see "
+            f"docs/circulars_worklist.md for which releases and where to look."
+        )
+
+    changes: list[IndexChange] = []
+    no_change: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    width = len(_MANUAL_COLUMNS)
+
+    for line_number, raw in enumerate(target.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if all(set(cell) <= {"-", ":"} and cell for cell in cells):
+            continue  # the ---|--- separator
+        if [cell.lower() for cell in cells] == list(_MANUAL_COLUMNS):
+            continue  # the header
+        if len(cells) != width:
+            raise IndexChangeError(
+                f"line {line_number}: {len(cells)} columns, expected {width} "
+                f"({', '.join(_MANUAL_COLUMNS)}). A stray '|' inside a cell will do this."
+            )
+
+        change, source, evidence = _parse_manual_row(cells, line_number)
+        row_index = change.index_name if change else cells[1].strip()
+        key = (source, row_index)
+        if key in seen:
+            raise IndexChangeError(
+                f"line {line_number}: {source} recorded twice for {row_index!r}. "
+                f"Two readings of one release cannot both be right."
+            )
+        seen.add(key)
+
+        if index_name is not None and row_index != index_name:
+            continue
+        if change is None:
+            no_change.append((source, evidence))
+        else:
+            changes.append(change)
+
+    return ManualRegister(
+        changes=tuple(sorted(changes, key=lambda c: c.effective_from)),
+        no_change=tuple(no_change),
+        source_path=target,
+    )

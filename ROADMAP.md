@@ -1,6 +1,6 @@
 # Roadmap
 
-**Last revised: 2026-08-10**
+**Last revised: 2026-08-12**
 
 This is the single forward-looking plan. Where it disagrees with an older note
 elsewhere in the repository, this file wins. `HYPOTHESES.md` remains the
@@ -15,26 +15,27 @@ governing document for anything evidential — this file may not weaken it.
 | 1 | Research foundation, feasibility verdict, H1–H6 registered | **Done** |
 | 1.5 | H4 regime overlay experiment | **Done — H4 REJECTED** |
 | 2 | Data layer: archiver, calendar, instrument master, validator, bhavcopy ingest, delisting register, adjustment engine | **Done** |
-| 3a | Universe construction (A5 proxy) | **Done**. Real-universe parser also built (`market.index_changes`); awaiting the PDFs |
+| 3a | Universe construction | **Done — real Nifty 100 reconstructed.** Membership continuous July 2015 → August 2026, net size change zero. A5 proxy retained as scaffolding only |
 | 3b | Adjusted price series pipeline | **Partial** — adjustment engine exists, not yet wired into the backtest path. 881 securities blocked and 3,802 large moves unresolved at last validation |
 | 3c | Transaction cost model | **Done** |
 | 3d | Event-driven engine | **Done** |
 | 3e | Self-deception suite, mutation-tested | **Done** |
 | 3f | Statistical gates (DSR, PBO) | **Done** |
-| 3g | Purged / embargoed walk-forward CV | **Not started** |
-| 4 | Hypothesis testing on the real universe | **Blocked** — needs only the NSE press releases now |
+| 3g | Purged / embargoed walk-forward CV | **Done** |
+| 4 | Hypothesis testing on the real universe | **Unblocked** — waiting on 3b only |
 | 5 | Allocation system | Not started |
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**643 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**678 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 
-## What is blocking everything: one remaining download
+## Data acquisition — complete
 
-Nothing in Phase 4 can produce a trustworthy result until these exist. In
-priority order.
+All three datasets have landed. Phase 4 is no longer blocked on data; it is
+blocked on 3b (adjusted prices) and 3g (validation). Instructions are retained
+for the annual top-up.
 
 ### 1. ~~Bhavcopy for 2025~~ — **DONE 2026-08-10**
 
@@ -158,17 +159,26 @@ only from the semi-annual ones drifts. The size self-check in
 ``reconstruct_membership`` catches this by refusing to return a membership that
 is not exactly 100.
 
-**Status 2026-08-12:** 1,037 releases downloaded, **32 Nifty 100 changes
-parsed**, coverage complete 2015–2026 except September 2021. Eleven scanned
-PDFs remain, of which **two matter** (`ind_prs23082021*.pdf`, the missing
-Sept 2021 review). See [`docs/circulars_worklist.md`](docs/circulars_worklist.md).
+**Status 2026-08-12 — CLOSED.** 1,037 releases downloaded. **33 changes applied,
+coverage continuous July 2015 → August 2026, net size change zero, nothing
+unread.** Exactly one release needed a human (a 29-page scan holding the
+September 2021 review on page 5).
 
-Four parser defects were found by running against the real archive, each of
-which had silently reported "this release does not touch the index":
-headings numbered `(3)` and `d)` as well as `3)`; four different wordings for
-the effective date, some with spaces inserted mid-word by PDF extraction;
-`"scrips"` instead of `"companies"`; and releases carrying two sections for the
-same index.
+Six defects were found by running against the real archive, each of which had
+silently reported "this release does not touch the index":
+
+| Defect | Cost had it stood |
+|---|---|
+| Headings numbered `(3)` and `d)`, not just `3)` | 103 releases |
+| Four effective-date wordings, some with spaces inserted mid-word | 148 releases |
+| `"scrips"` instead of `"companies"` | the entire 2016 gap |
+| Two sections for one index in a single release | the 2020-H2 gap |
+| **A second release format** — one security, a table of index names, no per-index heading | the 2024 DVR cancellation; found only because the index gained a net member |
+| **A reconstitution announced and then deferred** | five companies removed twice, March–June 2020 |
+
+The last two are the interesting ones: neither is a regex problem, and neither
+would ever have surfaced from a test fixture. See
+[`docs/circulars_worklist.md`](docs/circulars_worklist.md).
 
 **If some releases cannot be found, that is a finding to report — not a licence
 to substitute the proxy.** A5, clause 4.
@@ -190,6 +200,13 @@ Deliverable: `backtest/validation.py`, with tests proving that a deliberately
 leaked feature is caught by the purged split and missed by a naive one. Same
 pattern as the self-deception suite — the test must fail against the broken
 version, or it proves nothing.
+
+**Why this matters more here than in most projects.** The universe itself is
+built from a 126-session turnover window (A5) and every candidate signal will
+use a lookback of similar length. A fold boundary drawn without purging puts
+training and test observations that share up to 126 sessions of input on
+opposite sides of a line that is doing no work. The resulting Sharpe is not
+merely optimistic — it is measuring the overlap.
 
 ---
 

@@ -37,7 +37,7 @@ LISTING = """
 """
 
 HTML_LISTING = (
-    '<li><span>Sep 18, 2015</span>'
+    "<li><span>Sep 18, 2015</span>"
     '<a href="/Press_Release/ind_prs18092015.pdf">Change in Indices w.e.f October 19, 2015</a>'
     "</li>"
 )

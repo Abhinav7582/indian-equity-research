@@ -15,8 +15,11 @@ import pytest
 from indian_equity_research.market.index_changes import (
     IndexChange,
     IndexChangeError,
+    drop_deferred,
     extract_effective_date,
+    parse_index_list_exclusion,
     parse_index_section,
+    parse_release,
     reconstruct_membership,
 )
 
@@ -140,9 +143,7 @@ def test_cnx_100_is_found_when_nifty_100_is_asked_for() -> None:
     pre-rebrand release would look like one that simply did not touch the
     index -- which is a different and wrong conclusion.
     """
-    change = parse_index_section(
-        RELEASE_2015, "Nifty 100", announced_on=dt.date(2015, 8, 24)
-    )
+    change = parse_index_section(RELEASE_2015, "Nifty 100", announced_on=dt.date(2015, 8, 24))
     assert change.effective_from == dt.date(2015, 9, 28)
     assert change.excluded == ("CROMPGREAV",)
     assert change.included == ("ASHOKLEY",)
@@ -572,3 +573,239 @@ def test_parenthesised_and_lettered_headings_are_found() -> None:
             "1 Dabur India Ltd. DABUR\n"
         )
         assert parse_index_section(text, "Nifty 100").excluded == ("DABUR",), heading
+
+
+# ---------------------------------------------------------------------------
+# Sibling indices whose names begin with the index we want
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "sibling",
+    [
+        "NIFTY100 Equal Weight",
+        "NIFTY100 Liquid 15",
+        "NIFTY100 Low Volatility 30",
+        "NIFTY100 Quality 30",
+        "NIFTY100 Alpha 30",
+        "NIFTY100 ESG",
+        "NIFTY100 Enhanced ESG",
+        "Nifty 100 Equal Weight Index",
+    ],
+)
+def test_a_sibling_index_is_never_mistaken_for_the_parent(sibling: str) -> None:
+    """Reject headings that merely *start* with the index name.
+
+    NSE publishes at least seven indices called ``NIFTY100 <something>``. Their
+    sections sit in the same release, with identical table structure, a few
+    pages from the real one. Matching a prefix would silently attach the wrong
+    constituents -- a failure that produces a complete, plausible membership
+    history that is simply not the Nifty 100.
+
+    Found in ``ind_prs10092018.pdf``, whose only mention of the string is
+    ``4) NIFTY100 Low Volatility 30: No Change``.
+    """
+    text = (
+        "effective from September 30, 2018\n"
+        f"3) {sibling}\n"
+        "The following companies are being excluded:\n"
+        "Sr. No. Company Name Symbol\n"
+        "1 Dabur India Ltd. DABUR\n"
+    )
+    with pytest.raises(IndexChangeError, match="no section heading found"):
+        parse_index_section(text, "Nifty 100")
+
+
+def test_the_parent_is_still_found_beside_its_siblings() -> None:
+    """The guard above must not make the real section unfindable."""
+    text = (
+        "effective from September 30, 2018\n"
+        "3) Nifty 100\n"
+        "The following companies are being excluded:\n"
+        "Sr. No. Company Name Symbol\n"
+        "1 Abbott India Ltd. ABBOTINDIA\n"
+        "The following companies are being included:\n"
+        "Sr. No. Company Name Symbol\n"
+        "1 Bank of Baroda BANKBARODA\n"
+        "4) NIFTY100 Low Volatility 30: No Change\n"
+        "5) NIFTY100 Equal Weight\n"
+        "The following companies are being excluded:\n"
+        "Sr. No. Company Name Symbol\n"
+        "1 Wipro Ltd. WIPRO\n"
+    )
+    change = parse_index_section(text, "Nifty 100")
+    assert change.excluded == ("ABBOTINDIA",)
+    assert change.included == ("BANKBARODA",)
+
+
+# ---------------------------------------------------------------------------
+# The second published format: one security, a table of index names
+# ---------------------------------------------------------------------------
+
+# Verbatim from ind_prs23082024_1.pdf, the Tata Motors DVR cancellation. Rows 1
+# and 11 are the point: "Nifty 100" and "Nifty100 Equal Weight" are different
+# indices one line apart.
+DVR_RELEASE = """PRESS RELEASE
+Mumbai, August 23, 2024
+Replacements in indices
+These changes shall become effective from August 30, 2024 (close of August 29, 2024).
+A. Exclusion of Tata Motors Ltd. 'A' Ordinary Shares - DVR:
+On account of announcement of record date (September 01, 2024) by Tata Motors Ltd.
+for implementation of scheme of arrangement involving reduction of capital by way of
+cancellation of the entire 'A' Ordinary Shares, Tata Motors Ltd., 'A' Ordinary Shares -
+DVR (Symbol: TATAMTRDVR) shall be excluded from the following indices:
+Sr. No. Index Name
+1 Nifty 100
+2 Nifty 200
+3 Nifty 500
+4 Nifty Auto
+11 Nifty100 Equal Weight
+12 Nifty500 Equal Weight
+Consequently, the equity shares and investible weight factor (IWF) of Tata Motors Ltd.
+shall be revised based on the terms of shares exchange ratio.
+B. Replacements on account of monthly review of Nifty Shariah indices:
+1) Nifty50 Shariah
+The following company is being included:
+Sr. No. Company Name Symbol
+1 Britannia Industries Ltd. BRITANNIA
+"""
+
+
+def test_a_cancellation_release_is_parsed_from_the_index_list() -> None:
+    """The release that closed the net-size discrepancy.
+
+    Twelve years of parsed reviews left the Nifty 100 one member larger than it
+    started. A fixed-size index cannot do that, and the missing entry was this
+    release -- which has no '3) Nifty 100' heading at all.
+    """
+    change = parse_index_list_exclusion(
+        DVR_RELEASE, "Nifty 100", announced_on=dt.date(2024, 8, 23), source="ind_prs23082024_1.pdf"
+    )
+    assert change.excluded == ("TATAMTRDVR",)
+    assert change.included == ()
+    assert change.effective_from == dt.date(2024, 8, 30)
+    assert change.net_size_change == -1
+
+
+def test_the_equal_weight_row_does_not_count_as_the_parent_index() -> None:
+    """Rows 1 and 11 of the same table are different indices.
+
+    Matching by prefix would return a change for every ``Nifty100 *`` index in
+    the list, each attributed to the parent.
+    """
+    change = parse_index_list_exclusion(DVR_RELEASE, "Nifty 500")
+    assert change.excluded == ("TATAMTRDVR",)
+    for absent in ("Nifty 50", "Nifty Midcap 100", "Nifty Next 50"):
+        with pytest.raises(IndexChangeError, match="no 'excluded from the following indices'"):
+            parse_index_list_exclusion(DVR_RELEASE, absent)
+
+
+def test_the_section_format_is_not_read_as_an_index_list() -> None:
+    """The two parsers must not both claim the same release."""
+    with pytest.raises(IndexChangeError, match="no 'excluded from the following indices'"):
+        parse_index_list_exclusion(RELEASE, "Nifty 100")
+
+
+def test_a_detached_index_table_is_refused_not_ignored() -> None:
+    """A marker with no table behind it means extraction lost the table.
+
+    Silently concluding 'not affected' would keep a cancelled security in the
+    index for the rest of the backtest.
+    """
+    text = (
+        "effective from August 30, 2024\n"
+        "DVR (Symbol: TATAMTRDVR) shall be excluded from the following indices:\n"
+    )
+    with pytest.raises(IndexChangeError, match="no index table followed"):
+        parse_index_list_exclusion(text, "Nifty 100")
+
+
+def test_an_inclusion_phrased_as_an_index_list_lands_on_the_right_side() -> None:
+    text = (
+        "effective from August 30, 2024\n"
+        "Something Ltd. (Symbol: NEWCO) shall be included in the following indices:\n"
+        "Sr. No. Index Name\n"
+        "1 Nifty 100\n"
+    )
+    change = parse_index_list_exclusion(text, "Nifty 100")
+    assert change.included == ("NEWCO",)
+    assert change.excluded == ()
+
+
+def test_parse_release_accepts_both_formats() -> None:
+    """One entry point, both published shapes, neither result altered."""
+    assert parse_release(RELEASE, "Nifty 100") == parse_index_section(RELEASE, "Nifty 100")
+    assert parse_release(DVR_RELEASE, "Nifty 100") == parse_index_list_exclusion(
+        DVR_RELEASE, "Nifty 100"
+    )
+    assert parse_release(DVR_RELEASE, "Nifty 100").excluded == ("TATAMTRDVR",)
+
+
+def test_parse_release_reports_both_failures_when_neither_format_applies() -> None:
+    """The error has to say which formats were tried, or it teaches nothing."""
+    with pytest.raises(IndexChangeError) as excinfo:
+        parse_release(DVR_RELEASE, "Nifty Midcap 100", source="x.pdf")
+    message = str(excinfo.value)
+    assert "as a section:" in message
+    assert "as an index list:" in message
+
+
+# ---------------------------------------------------------------------------
+# Announced, then withdrawn
+# ---------------------------------------------------------------------------
+
+
+def test_a_deferred_release_is_dropped() -> None:
+    """March 2020: announced, deferred "until further notice", never applied.
+
+    Nothing inside the February release says it was withdrawn -- it is a normal,
+    well-formed document announcing changes on a stated date. Only the later
+    "Deferment of Index Rebalancing" release says otherwise.
+    """
+    deferred = IndexChange(
+        index_name="Nifty 100",
+        effective_from=dt.date(2020, 3, 27),
+        announced_on=dt.date(2020, 2, 18),
+        excluded=("ASHOKLEY", "IBULHSGFIN"),
+        included=("ADANITRANS", "IDBI"),
+        source="ind_prs18022020.pdf",
+    )
+    applied = IndexChange(
+        index_name="Nifty 100",
+        effective_from=dt.date(2020, 6, 26),
+        announced_on=dt.date(2020, 6, 10),
+        excluded=("ASHOKLEY", "IBULHSGFIN"),
+        included=("ABBOTINDIA", "IGL"),
+        source="ind_prs10062020.pdf",
+    )
+    assert drop_deferred([deferred, applied]) == [applied]
+
+
+def test_the_accelerated_yes_bank_removal_survives_the_deferral() -> None:
+    """The 16 March release took effect on 19 March, before the deferral.
+
+    Dropping it along with the rest of March would be the opposite error, and
+    just as invisible.
+    """
+    yes_bank = IndexChange(
+        index_name="Nifty 100",
+        effective_from=dt.date(2020, 3, 19),
+        announced_on=dt.date(2020, 3, 16),
+        excluded=("YESBANK",),
+        included=("ADANITRANS",),
+        source="ind_prs16032020.pdf",
+    )
+    assert drop_deferred([yes_bank]) == [yes_bank]
+
+
+def test_an_unattributed_change_cannot_be_checked_and_is_refused() -> None:
+    """Without a source there is no way to know whether it was withdrawn."""
+    orphan = IndexChange(
+        index_name="Nifty 100",
+        effective_from=dt.date(2020, 3, 27),
+        announced_on=None,
+        excluded=("ASHOKLEY",),
+        included=("IDBI",),
+    )
+    with pytest.raises(IndexChangeError, match="no source release"):
+        drop_deferred([orphan])

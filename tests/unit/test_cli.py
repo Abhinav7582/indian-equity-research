@@ -192,9 +192,7 @@ class TestCircularsCommand:
     """
 
     @pytest.fixture(autouse=True)
-    def _isolated_data_root(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def _isolated_data_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Point every setting at an empty tree, never the real one."""
         monkeypatch.setenv("DATA_ROOT", str(tmp_path))
         monkeypatch.setenv("RAW_DIR", str(tmp_path / "raw"))

@@ -42,7 +42,7 @@ def sessions(n: int) -> list[dt.date]:
     return [START + dt.timedelta(days=i) for i in range(n)]
 
 
-def flat_series(symbol: str, days: list[dt.date], price: float) -> dict:
+def flat_series(symbol: str, days: list[dt.date], price: float) -> dict[str, dict[dt.date, Bar]]:
     """Build a security whose price never moves.
 
     Any change in equity is then unambiguously caused by the engine.
@@ -50,8 +50,10 @@ def flat_series(symbol: str, days: list[dt.date], price: float) -> dict:
     return {symbol: {d: Bar(d, price, price, price, price) for d in days}}
 
 
-def trending(symbol: str, days: list[dt.date], start: float, daily: float) -> dict:
-    bars = {}
+def trending(
+    symbol: str, days: list[dt.date], start: float, daily: float
+) -> dict[str, dict[dt.date, Bar]]:
+    bars: dict[dt.date, Bar] = {}
     price = start
     for d in days:
         bars[d] = Bar(d, price, price * 1.01, price * 0.99, price * (1 + daily))
@@ -250,7 +252,7 @@ def test_more_churn_costs_strictly_more() -> None:
     ordered = sorted(data["ACME"])
     for period in (20, 8, 2):
 
-        def churn(view: PriceView, p: int = period, o: list = ordered) -> dict[str, float]:
+        def churn(view: PriceView, p: int = period, o: list[dt.date] = ordered) -> dict[str, float]:
             return {"ACME": 1.0} if (o.index(view.as_of) // p) % 2 == 0 else {}
 
         r = run_backtest(data, days, churn, config=cfg)

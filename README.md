@@ -78,18 +78,20 @@ because retrofitting point-in-time correctness into an existing schema is far
 more expensive than designing for it. The research path currently runs on files,
 not on the database.
 
-### Blocked on one remaining download
+### Data acquisition — complete
 
-Nothing in Phase 4 can produce a trustworthy result until these land. Steps are
-in [`ROADMAP.md`](ROADMAP.md).
+| Dataset | Coverage |
+|---|---|
+| Bhavcopy | 2015-01-01 → 2026-08-05, 2,861 sessions, 5.33M rows, no gaps |
+| NIFTY 100 TRI | 2015–2026, 12 files |
+| NSE index-change press releases | 1,037 downloaded; **Nifty 100 membership continuous July 2015 → August 2026, net size change zero** |
 
-1. **NSE index-change press releases** — the real index membership. Under
-   Amendment A5 no hypothesis can be tested on the proxy universe. The parser
-   is built and tested; only the PDFs are missing. See
-   [`docs/universe_reconstruction.md`](docs/universe_reconstruction.md).
-
-**Done:** bhavcopy 2015-01-01 to 2026-08-05 (2,861 sessions, 5.33M rows, no
-gaps) and NIFTY 100 TRI 2015–2026 (12 files).
+The real index membership is reconstructed, so Amendment A5's bar is met and
+hypotheses may be tested on the actual Nifty 100 rather than the proxy. Of 1,037
+releases, 33 changes were parsed automatically, one scanned release was read by
+eye, and one announced-then-deferred reconstitution was correctly excluded. See
+[`docs/circulars_worklist.md`](docs/circulars_worklist.md) for the four defects
+this uncovered.
 
 ## Technology stack
 
@@ -213,9 +215,9 @@ tests/       Unit and integration suites
   personal holdings snapshot. Fill into `data/reference/portfolio.md`
   (git-ignored). **Never read by the backtester** — see the boundary note in
   the template.
-- [`docs/circulars_worklist.md`](docs/circulars_worklist.md) — the 15 press
-  releases that need reading by eye, why each failed to parse, and the three
-  coverage gaps that block Phase 4
+- [`docs/circulars_worklist.md`](docs/circulars_worklist.md) — **closed.** How
+  Nifty 100 membership was reconstructed, the four defects found doing it, and
+  the two prefix traps that would have silently built the wrong index
 - [`docs/universe_reconstruction.md`](docs/universe_reconstruction.md) — how to
   obtain and parse NSE index-change press releases, and how to walk membership
   backwards from today's constituent list

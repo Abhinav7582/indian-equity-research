@@ -1,166 +1,141 @@
-# Press-release worklist — 11 scanned PDFs, 2 of them critical
+# Press-release worklist — closed
 
-**Generated and revised 2026-08-12** from 1,037 downloaded releases.
+**Closed 2026-08-12.** Nifty 100 membership is reconstructed continuously from
+July 2015 to August 2026 with **net size change zero** and **no unread release**.
 
-> **Revision note.** The first version of this file listed 15 files and asked
-> for manual work on 6 of them. That was premature — every one of those 6 was a
-> parser bug, not a document needing human eyes:
->
-> | Cause | Effect |
-> |---|---|
-> | NSE writes **"scrips"**, not "companies", in 2016 | closed the entire 2016 gap |
-> | A release can carry **two sections for the same index** — an eligibility-criteria table and, further down, the replacement list | closed the 2020-H2 gap |
->
-> What remains is only what genuinely cannot be read by machine: scanned images
-> with no text layer.
+> This file was a worklist three times over. It asked for 15 files by hand, then
+> 11, then 2. Every reduction came from a parser defect, not from the documents
+> being difficult. The final count of releases a human had to read is **one**.
 
 ---
 
-## Where this stands
+## Where this ended
 
 | | |
 |---|---:|
-| Total downloaded | 1,037 |
-| Announced before July 2015 — **out of scope** | 301 |
-| No Nifty 100 section — correctly ignored | ~690 |
-| **Parsed cleanly** | **32** |
-| **Need a human** | **11** |
-| **Net size change** | **+1** |
+| Releases downloaded | 1,037 |
+| Announced before July 2015 — out of scope | 301 |
+| No Nifty 100 change — correctly ignored | ~700 |
+| **Parsed automatically** | **33** |
+| **Read by eye** (scans) | **1** |
+| Deferred, correctly dropped | 1 |
+| **Changes applied** | **33** |
+| **Net size change** | **0** |
+| Unresolved | **0** |
 
 **Why pre-July-2015 is out of scope.** Bhavcopy begins 2015-01-01 and the
 universe needs 126 sessions of history, so the earliest possible backtest start
-is around October 2015. A membership change effective before then cannot affect
-any result.
+is around October 2015. A change effective before then cannot affect a result.
 
 ---
 
-## Coverage — one gap left
+## Coverage
 
 Each year needs a review around March/April and one around September/October.
 
-| Year | Effective dates found | |
-|---|---|---|
-| 2015 | 09-28, 10-19 | ok |
-| 2016 | 04-01, 09-30, 11-15 | ok |
-| 2017 | 03-31, 05-26, 09-29 | ok |
-| 2018 | 04-02, 09-28 | ok |
-| 2019 | 03-29, 09-27 | ok |
-| 2020 | 03-19, 03-27, 06-26, 07-31, 09-25 | ok |
-| **2021** | 03-31, 06-30 | **H2 missing** |
-| 2022 | 03-31, 08-08, 09-30 | ok |
-| 2023 | 03-31, 07-13, 09-29 | ok |
-| 2024 | 03-28, 09-30 | ok |
-| 2025 | 03-28, 09-30 | ok |
-| 2026 | 03-30, 09-30 | ok |
+| Year | H1 | H2 | Interim |
+|---|---|---|---|
+| 2015 | n/a | 09-28 | 10-19 |
+| 2016 | 04-01 | 09-30 | 11-15 |
+| 2017 | 03-31 | 09-29 | 05-26 |
+| 2018 | 04-02 | 09-28 | |
+| 2019 | 03-29 | 09-27 | |
+| 2020 | 03-19 | 07-31 | 06-26, 09-25 |
+| 2021 | 03-31 | 09-30 | 06-30 |
+| 2022 | 03-31 | 08-08 | 09-30 |
+| 2023 | 03-31 | 07-13 | 09-29 |
+| 2024 | 03-28 | 08-30 | 09-30 |
+| 2025 | 03-28 | 09-30 | |
+| 2026 | 03-30 | 09-30 | |
 
 ---
 
-## Priority 1 — the missing September 2021 review (2 files)
+## The four things that were actually wrong
 
-**These two are the only thing blocking full coverage.**
+### 1. September 2021 was in a release nobody expected
 
-| Announced | File | |
-|---|---|---|
-| 2021-08-23 | `ind_prs23082021.pdf` | scanned, 0 characters extractable |
-| 2021-08-23 | `ind_prs23082021_1.pdf` | scanned, 35 characters extractable |
+The worklist assumed the September 2021 review was announced in September. It
+was not: neither `ind_prs15092021.pdf` nor `ind_prs20092021.pdf` mentions the
+Nifty 100 at all, despite the latter being titled *"Replacements in indices"*
+and dated ten days before the effective date.
 
-**How to hand these over:** open each PDF, find the section headed
-`Nifty 100`, screenshot it, and paste the image into the conversation. Images
-are readable directly — no transcription needed.
+It was in `ind_prs23082021.pdf` — a 29-page scan — on **page 5**, under
+`3) NIFTY 100`. Found by rendering every page and OCR-ing it, then read by eye.
 
-Capture the **effective date stated in the text** too. It is roughly five weeks
-after the date in the filename, and must never be inferred.
+**−5 +5, effective 30 September 2021.** Recorded in the register; two
+independent consistency checks passed (see that file).
 
-## Priority 2 — scanned interim releases (9 files)
+### 2. Nine "scanned" releases were not index changes at all
 
-Both 2018 and 2023 already have their semi-annual reviews covered, so these are
-interim changes or releases about other indices. Lower priority, but they must
-be **checked rather than assumed** — an unread interim change is exactly what
-makes a reconstruction drift out of alignment.
+All nine were rendered and OCR'd. None touches the Nifty 100. One is not even a
+press release — `ind_prs16062018.pdf` is an **arbitration award** with IISL as
+claimant, caught only because its filename matches the pattern.
 
-| Announced | File |
-|---|---|
-| 2018-06-16 | `ind_prs16062018.pdf` |
-| 2018-09-10 | `ind_prs10092018.pdf` |
-| 2018-09-18 | `ind_prs18092018.pdf` |
-| 2018-09-24 | `ind_prs24092018.pdf` |
-| 2018-09-24 | `ind_prs24092018_1.pdf` |
-| 2018-09-25 | `ind_prs25092018.pdf` |
-| 2018-12-03 | `ind_prs03122018.pdf` |
-| 2023-06-19 | `ind_prs19062023.pdf` |
-| 2023-06-26 | `ind_prs26062023.pdf` |
+### 3. A whole release format was invisible
 
-If a release does not change the Nifty 100, record `no change` — that is a
-useful answer and stops it being revisited.
+`ind_prs23082024_1.pdf` (Tata Motors DVR cancellation) contains no
+`N) Nifty 100` heading. It uses a different shape entirely: one paragraph naming
+the security, then a table of *index names* it drops out of.
 
----
+`parse_index_section` reported "this release does not change the index" —
+confidently, and wrongly. `parse_index_list_exclusion` now handles it.
 
-## Two judgement calls code cannot make
+**How it was caught:** the reconstructed index had gained a net member over
+twelve years. A fixed-size index cannot do that. Everything else about the
+history looked fine.
 
-### 1. The 2020 supersession
+The `+1` was one thread throughout — **TATAMTRDVR**, in 2016, out 2020, in 2023,
+and out for good in 2024 when the DVR shares were cancelled.
 
-```
-2020-03-27  out: ASHOKLEY, IBULHSGFIN, L&TFH, IDEA, YESBANK
-            in:  ADANITRANS, IDBI, NAUKRI, LTI, TORNTPHARM
+### 4. A reconstitution that was announced and never happened
 
-2020-06-26  out: ASHOKLEY, IBULHSGFIN, L&TFH, NIACL, IDEA, TATAMTRDVR
-            in:  ABBOTINDIA, IGL, NAUKRI, MUTHOOTFIN, TORNTPHARM
-```
+`ind_prs18022020.pdf` announced a −5 +5 review effective **27 March 2020**. NSE
+then deferred it *"until further notice"* on 23 March, citing circuit breakers,
+margin requirements and travel restrictions, and replaced it with the June
+review effective 26 June.
 
-The same names appear in both. NSE **deferred** the March 2020 reconstitution
-because of the COVID crash, so one release supersedes the other — they are not
-two events to apply in sequence. Applying both would remove companies twice and
-corrupt every date afterwards.
+Nothing in the February release says it was withdrawn. Applying both would have
+removed five companies twice and left membership wrong for three months.
 
-Read both and record which took effect, and why.
+`DEFERRED_RELEASES` in `market/index_changes.py` records the mapping.
 
-### 2. The +1 net size change
-
-Three releases have a non-zero net:
-
-| | | |
-|---|---:|---|
-| 2016-04-01 | +1 | `ind_prs22022016_2.pdf` |
-| 2020-06-26 | −1 | `ind_prs10062020.pdf` |
-| 2023-09-29 | +1 | `ind_prs17082023.pdf` |
-
-The 2023 one is **as printed**: six inclusions against five exclusions, with
-`Tata Motors Ltd. DVR / TATAMTRDVR` as the sixth. That is what the PDF says.
-Either the index briefly held 101 members, or the DVR share was handled as a
-special case alongside the ordinary share. Worth a note in the record rather
-than a code change.
-
-The other two want a glance to confirm no row has been miscounted.
+**Not deferred:** `ind_prs16032020.pdf`, the accelerated YES BANK removal
+effective 19 March, which took effect before the deferral. Dropping that as part
+of "March 2020" would be the opposite error and just as invisible.
 
 ---
 
-## Recording answers
+## Two prefix traps, same shape, different places
 
-Create `data/reference/index_changes_manual.md` (git-ignored) with:
+NSE runs at least seven indices named `NIFTY100 <something>` — Equal Weight,
+Liquid 15, Low Volatility 30, Quality 30, Alpha 30, ESG, Enhanced ESG.
 
-```
-| file | effective_from | excluded | included | note |
-|---|---|---|---|---|
-| ind_prs23082021.pdf | 2021-09-30 | ABC, DEF | GHI, JKL | read by hand |
-```
+- As a **section heading**: `4) NIFTY100 Low Volatility 30: No Change` in
+  `ind_prs10092018.pdf`.
+- As an **index-list row**: rows 1 and 11 of the DVR table are `Nifty 100` and
+  `Nifty100 Equal Weight`.
+
+A prefix match in either place attaches the wrong constituents and produces a
+complete, plausible membership history that is not the Nifty 100. Both are
+matched exactly and both are pinned by tests.
 
 ---
 
-## When it is done
+## Reproducing this
 
 ```bash
 uv run python -m indian_equity_research circulars --parse
 ```
 
-Two conditions before the reconstruction can be trusted:
+Two conditions, both now met:
 
-1. **Net size change is zero**, or every non-zero entry is explained.
-2. **Every year has both reviews.** Only 2021-H2 is outstanding.
+1. Net size change is zero, or every non-zero entry is explained.
+2. Every year has both reviews.
 
-Then `reconstruct_membership` walks backwards from today's constituent list. It
-refuses to return a membership that is not exactly 100, so any remaining gap
-announces itself rather than passing silently.
+`reconstruct_membership` refuses to return a membership that is not exactly 100,
+so a regression announces itself rather than passing silently.
 
-**If a release genuinely cannot be found or read, record that too.** Under
-Amendment A5 clause 4 a documented gap is a finding to report — not a licence to
-fall back on the proxy universe.
+**The one thing a fresh clone still needs.** `data/reference/index_changes_manual.md`
+is git-ignored, because NSE prohibits redistribution and a transcribed
+membership list is still NSE's data. `load_manual_register` fails loudly if it
+is absent. That file documents how to regenerate itself.

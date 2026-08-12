@@ -49,9 +49,9 @@ def make_records(
                         low=99.0,
                         close=100.0,
                         previous_close=100.0,
-                        volume=1000.0,
+                        volume=1000,
                         turnover=turnover,
-                        trades=10.0,
+                        trades=10,
                     )
                 )
             made += 1
