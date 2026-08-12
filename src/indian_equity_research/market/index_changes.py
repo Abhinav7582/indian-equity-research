@@ -116,8 +116,14 @@ _ROW_RE: Final = re.compile(r"^\s*\d+\s+(.+?)\s+([A-Z0-9&\-]{2,})\s*$")
 # conclusion -- and a silent one.
 _SECTION_NUMBER: Final = r"\(?\s*(?:\d{1,2}|[A-Za-z])\s*\)"
 
-_EXCLUDED_RE: Final = re.compile(r"following\s+compan(?:y|ies)\s+(?:is|are)\s+being\s+excluded")
-_INCLUDED_RE: Final = re.compile(r"following\s+compan(?:y|ies)\s+(?:is|are)\s+being\s+included")
+# NSE calls the listed entities "companies" in most years and "scrips" in
+# others -- 2016 uses "The following scrips are being excluded". Requiring
+# "companies" silently lost every 2016 release, and 2016 is the one year with
+# no membership data at all. "securities" is included pre-emptively because the
+# archive has already changed this noun once.
+_ENTITY: Final = r"(?:compan(?:y|ies)|scrips?|securit(?:y|ies))"
+_EXCLUDED_RE: Final = re.compile(rf"following\s+{_ENTITY}\s+(?:is|are)\s+being\s+excluded")
+_INCLUDED_RE: Final = re.compile(rf"following\s+{_ENTITY}\s+(?:is|are)\s+being\s+included")
 _HEADER_RE: Final = re.compile(r"^\s*Sr\.?\s*No\.?\s+Company\s+Name\s+Symbol\s*$", re.IGNORECASE)
 
 # IISL rebranded every index on 22 September 2015: "CNX 100" became "Nifty 100",
@@ -271,10 +277,27 @@ def parse_index_section(
             stated, or if the section contains neither exclusions nor inclusions.
     """
     effective = extract_effective_date(text)
-    section = _isolate_section(text, index_name)
+    sections = _isolate_sections(text, index_name)
 
-    excluded = _rows_after(section, _EXCLUDED_RE)
-    included = _rows_after(section, _INCLUDED_RE)
+    # A release can carry more than one section for the same index. Real
+    # example, ind_prs20082020.pdf, titled "Revision in criteria AND
+    # replacements in Indices": one "NIFTY 100" section is a table of eligibility
+    # criteria, another is the actual replacement list. Taking the first match
+    # found the criteria table, saw no companies in it, and reported the
+    # September 2020 reconstitution as absent.
+    #
+    # So try every candidate and keep the one that actually carries a
+    # membership table. Failing over is safe because a criteria section has no
+    # exclusion or inclusion rows at all -- there is nothing to confuse it with.
+    excluded: tuple[str, ...] = ()
+    included: tuple[str, ...] = ()
+    section = sections[0]
+    for candidate in sections:
+        candidate_excluded = _rows_after(candidate, _EXCLUDED_RE)
+        candidate_included = _rows_after(candidate, _INCLUDED_RE)
+        if candidate_excluded or candidate_included:
+            section, excluded, included = candidate, candidate_excluded, candidate_included
+            break
 
     # A heading that announces a table and is followed by no rows means the
     # PDF laid its tables out away from their headings, and extraction has
@@ -323,40 +346,50 @@ def parse_index_section(
     )
 
 
-def _isolate_section(text: str, index_name: str) -> str:
-    """Return the text belonging to one index heading.
+def _isolate_sections(text: str, index_name: str) -> list[str]:
+    """Return every block of text belonging to a heading for this index.
 
-    A release contains twenty or more sections with identical table structure.
-    The section runs from its own numbered heading to the next one.
+    A release contains twenty or more sections with identical table structure,
+    and occasionally **more than one** for the same index -- see the note in
+    :func:`parse_index_section`. Each section runs from its own heading to the
+    next one.
 
     Every known alias of ``index_name`` is tried, so a pre-2015 release naming
     the index "CNX 100 Index" is found when "Nifty 100" is asked for. A trailing
     "Index" is optional because older releases include it and current ones do
     not.
     """
-    candidates = INDEX_ALIASES.get(index_name, (index_name,))
-    for alias in candidates:
+    aliases = INDEX_ALIASES.get(index_name, (index_name,))
+    next_heading = re.compile(rf"^\s*{_SECTION_NUMBER}\s*\S", re.MULTILINE)
+    sections: list[str] = []
+
+    for alias in aliases:
         # "Nifty 100" must also match a heading written "Nifty100".
         flexible = re.escape(alias).replace(r"\ ", r"\s*")
         heading = re.compile(
             rf"^\s*{_SECTION_NUMBER}\s*{flexible}(?:\s+Index)?\s*$",
             re.IGNORECASE | re.MULTILINE,
         )
-        match = heading.search(text)
-        if match:
+        for match in heading.finditer(text):
             start = match.end()
-            following = re.compile(rf"^\s*{_SECTION_NUMBER}\s*\S", re.MULTILINE).search(text, start)
+            following = next_heading.search(text, start)
             end = following.start() if following else len(text)
-            return text[start:end]
+            sections.append(text[start:end])
+        if sections:
+            # Aliases are alternative names for one index, not different
+            # indices. Once one has matched, the others cannot also apply.
+            break
 
-    tried = ", ".join(repr(a) for a in candidates)
-    raise IndexChangeError(
-        f"no section heading found for {index_name!r} (tried {tried}). Headings "
-        f"look like '3) Nifty 100' or '2) CNX 100 Index' on their own line. "
-        f"Either this release does not change that index, or the index used a "
-        f"name not yet listed in INDEX_ALIASES — IISL renamed every index on "
-        f"{REBRAND_DATE}, so pre-2015 releases use the CNX names."
-    )
+    if not sections:
+        tried = ", ".join(repr(a) for a in aliases)
+        raise IndexChangeError(
+            f"no section heading found for {index_name!r} (tried {tried}). Headings "
+            f"look like '3) Nifty 100' or '2) CNX 100 Index' on their own line. "
+            f"Either this release does not change that index, or the index used a "
+            f"name not yet listed in INDEX_ALIASES — IISL renamed every index on "
+            f"{REBRAND_DATE}, so pre-2015 releases use the CNX names."
+        )
+    return sections
 
 
 def _rows_after(section: str, marker: re.Pattern[str]) -> tuple[str, ...]:

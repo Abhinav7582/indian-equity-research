@@ -476,3 +476,99 @@ def test_alternate_effective_date_phrasings_all_parse() -> None:
     }
     for text, expected in cases.items():
         assert extract_effective_date(text) == expected, text
+
+
+# Modelled on ind_prs20082020.pdf, titled "Revision in criteria and replacements
+# in Indices". It carries two NIFTY 100 sections: an eligibility-criteria table
+# and, further down, the actual replacement list.
+TWO_SECTIONS = """Press Release August 20, 2020
+Revision in criteria and replacements in Indices
+These changes shall become effective from September 25, 2020.
+A. Revision in eligibility criteria
+B) NIFTY 100
+Parameter Existing Criteria Revised Criteria
+Eligible universe 1. Constituent of NIFTY 500 index
+2. Investible weight factor of at least 0.10
+C) NIFTY 500
+Parameter Existing Criteria Revised Criteria
+Eligible universe 1. Listed on NSE
+D. Replacements on account of semi-annual review
+B) NIFTY 100
+The following companies are being excluded:
+Sr. No. Company Name Symbol
+1 Bharti Infratel Ltd. INFRATEL
+2 Vodafone Idea Ltd. IDEA
+The following companies are being included:
+Sr. No. Company Name Symbol
+1 Adani Green Energy Ltd. ADANIGREEN
+2 Aurobindo Pharma Ltd. AUROPHARMA
+E) NIFTY 50
+The following companies are being excluded:
+Sr. No. Company Name Symbol
+1 Zee Entertainment Enterprises Ltd. ZEEL
+"""
+
+
+def test_a_criteria_section_does_not_hide_the_replacement_section() -> None:
+    """Regression test for the missing September 2020 reconstitution.
+
+    A release headed "Revision in criteria AND replacements" carries two
+    sections for the same index. Taking the first match found the criteria
+    table, saw no company rows in it, and reported the reconstitution as
+    absent -- which read as "NSE skipped a review", not as a parse failure.
+    """
+    change = parse_index_section(TWO_SECTIONS, "Nifty 100", announced_on=dt.date(2020, 8, 20))
+    assert change.effective_from == dt.date(2020, 9, 25)
+    assert change.excluded == ("INFRATEL", "IDEA")
+    assert change.included == ("ADANIGREEN", "AUROPHARMA")
+
+
+def test_the_wrong_section_is_not_silently_preferred() -> None:
+    """The criteria section must not contribute rows of its own.
+
+    Its table has a "Parameter / Existing / Revised" shape and numbered lines,
+    which is close enough to a company table to be picked up by a careless
+    row matcher.
+    """
+    change = parse_index_section(TWO_SECTIONS, "Nifty 100")
+    for symbol in change.excluded + change.included:
+        assert symbol not in {"NIFTY", "500"}
+    assert change.net_size_change == 0
+
+
+def test_scrips_wording_parses_as_well_as_companies() -> None:
+    """NSE says "scrips" in 2016 and "companies" elsewhere.
+
+    Requiring "companies" lost every 2016 release, and 2016 was the only year
+    with no membership data at all.
+    """
+    text = (
+        "These changes shall become effective from April 1, 2016.\n"
+        "15) Nifty 100 Index\n"
+        "The following scrips are being excluded:\n"
+        "Sr. No. Scrip Name Symbol\n"
+        "1 Bank of India BANKINDIA\n"
+        "The following scrips are being included:\n"
+        "Sr. No. Scrip Name Symbol\n"
+        "1 ABB India Ltd. ABB\n"
+    )
+    change = parse_index_section(text, "Nifty 100")
+    assert change.excluded == ("BANKINDIA",)
+    assert change.included == ("ABB",)
+
+
+def test_parenthesised_and_lettered_headings_are_found() -> None:
+    """Find headings numbered every way NSE has used.
+
+    They are '3)', '(3)' and 'd)' in different years. Requiring a bare '3)'
+    lost 103 releases, each looking like one that did not touch the index.
+    """
+    for heading in ("3) Nifty 100", "(3) Nifty 100", "d) Nifty 100", "(d) Nifty 100 Index"):
+        text = (
+            "effective from September 30, 2025\n"
+            f"{heading}\n"
+            "The following companies are being excluded:\n"
+            "Sr. No. Company Name Symbol\n"
+            "1 Dabur India Ltd. DABUR\n"
+        )
+        assert parse_index_section(text, "Nifty 100").excluded == ("DABUR",), heading

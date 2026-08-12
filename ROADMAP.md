@@ -27,7 +27,7 @@ governing document for anything evidential — this file may not weaken it.
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**628 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**643 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 
@@ -158,10 +158,17 @@ only from the semi-annual ones drifts. The size self-check in
 ``reconstruct_membership`` catches this by refusing to return a membership that
 is not exactly 100.
 
-**Status 2026-08-12:** 1,037 releases downloaded, 28 Nifty 100 changes parsed,
-**net size change exactly zero**. Fifteen files need reading by eye and three
-coverage gaps remain (2016 entirely, 2020-H2, 2021-H2). See
-[`docs/circulars_worklist.md`](docs/circulars_worklist.md).
+**Status 2026-08-12:** 1,037 releases downloaded, **32 Nifty 100 changes
+parsed**, coverage complete 2015–2026 except September 2021. Eleven scanned
+PDFs remain, of which **two matter** (`ind_prs23082021*.pdf`, the missing
+Sept 2021 review). See [`docs/circulars_worklist.md`](docs/circulars_worklist.md).
+
+Four parser defects were found by running against the real archive, each of
+which had silently reported "this release does not touch the index":
+headings numbered `(3)` and `d)` as well as `3)`; four different wordings for
+the effective date, some with spaces inserted mid-word by PDF extraction;
+`"scrips"` instead of `"companies"`; and releases carrying two sections for the
+same index.
 
 **If some releases cannot be found, that is a finding to report — not a licence
 to substitute the proxy.** A5, clause 4.
