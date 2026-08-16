@@ -16,7 +16,7 @@ governing document for anything evidential — this file may not weaken it.
 | 1.5 | H4 regime overlay experiment | **Done — H4 REJECTED** |
 | 2 | Data layer: archiver, calendar, instrument master, validator, bhavcopy ingest, delisting register, adjustment engine | **Done** |
 | 3a | Universe construction | **Done — real Nifty 100 reconstructed.** Membership continuous July 2015 → August 2026, net size change zero. A5 proxy retained as scaffolding only |
-| 3b | Adjusted price series pipeline | **Partial** — feed acquired and audited. Of 487 large moves in liquid names: 217 explained by a documented action, 138 are listing days, 12 market-wide, **120 open** in `data/reference/adjustment_audit.md`, pre-sorted by two independent signals into 23 likely-action / 61 likely-crash / 36 unclear. Confirm those, then wire adjustments into the backtest path |
+| 3b | Adjusted price series pipeline | **Partial** — feed acquired and audited. Of 487 large moves in liquid names: 217 explained by a documented action, 138 are listing days, 12 market-wide, **120 open** in `data/reference/adjustment_audit.md`, pre-sorted by two independent signals. **61 crashes confirmed**; 36 unclear and 23 likely-action outstanding. Then wire adjustments into the backtest path |
 | 3c | Transaction cost model | **Done** |
 | 3d | Event-driven engine | **Done** |
 | 3e | Self-deception suite, mutation-tested | **Done** |
@@ -27,7 +27,7 @@ governing document for anything evidential — this file may not weaken it.
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**718 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**728 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 

@@ -116,8 +116,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--min-price", type=float, default=50.0)
     parser.add_argument("--min-turnover", type=float, default=20.0, help="in crore")
+    parser.add_argument(
+        "--accept",
+        metavar="HINT",
+        help="bulk-fill blank verdicts whose hint matches, e.g. --accept 'likely crash'",
+    )
     args = parser.parse_args()
     cfg = ValidationConfig()
+
+    # Verdicts already recorded. A rerun MUST NOT discard them: the register is
+    # regenerated from the archive every time, and a human's classification of
+    # 120 rows is not reproducible work.
+    existing: dict[tuple[str, str], str] = {}
+    if OUT.exists():
+        for line in OUT.read_text(encoding="utf-8").splitlines():
+            if line.startswith("| 2"):
+                cells = [c.strip() for c in line.strip("|").split("|")]
+                if len(cells) >= 7 and cells[6]:
+                    existing[(cells[0], cells[1])] = cells[6]
+        print(f"carrying forward {len(existing)} existing verdict(s)")
 
     documented: dict[tuple[str, dt.date], float] = {}
     action_files = sorted(ACTIONS.glob("*.json"))
@@ -262,11 +279,18 @@ def main() -> int:
         "| date | symbol | multiplier | turnover x20d | ratio fit | hint | verdict |",
         "|---|---|---:|---:|---|---|---|",
     ]
+    filled = 0
     for when, symbol, _isin, multiplier, _tv, turnover_x, ratio_note, hint in sorted(open_moves):
+        verdict = existing.get((str(when), symbol), "")
+        if not verdict and args.accept and hint == args.accept:
+            verdict = "crash" if hint == "likely crash" else ""
+            filled += 1 if verdict else 0
         lines.append(
             f"| {when} | {symbol} | {multiplier:.4f} | {turnover_x:.1f}x | "
-            f"{ratio_note} | {hint} |  |"
+            f"{ratio_note} | {hint} | {verdict} |"
         )
+    if filled:
+        print(f"bulk-filled {filled} verdict(s) from --accept {args.accept!r}")
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\nregister written to {OUT}")
     return 0
