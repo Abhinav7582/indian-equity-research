@@ -15,6 +15,7 @@ from indian_equity_research.market.corporate_actions import (
     AnomalyClass,
     CorporateAction,
     ValidationConfig,
+    match_plausible_action,
     validate_adjustment_factors,
     validate_price_series,
 )
@@ -291,3 +292,37 @@ class TestMarketExtremeDays:
             validate_price_series(stock, market=market, config=loose).anomalies[0].classification
             is AnomalyClass.EXPLAINED_BY_MARKET
         )
+
+
+# ---------------------------------------------------------------------------
+# Ratio matching, as used by the adjustment triage
+# ---------------------------------------------------------------------------
+
+
+def test_real_action_ratios_are_matched() -> None:
+    """The multipliers actually seen in the archive."""
+    for observed, expected in ((0.5015, 0.5), (0.2000, 0.2), (0.1005, 0.1), (0.6681, 2 / 3)):
+        match = match_plausible_action(observed)
+        assert match is not None, observed
+        assert match[0] == pytest.approx(expected, rel=0.01)
+
+
+def test_a_move_matching_no_action_returns_none() -> None:
+    """ADANIENT fell to x0.1723 on 2015-06-03 with no corporate action.
+
+    A ratio matcher that found something here would licence adjusting away a
+    genuine collapse, which is the failure direction that hides itself.
+    """
+    assert match_plausible_action(0.1723) is None
+    assert match_plausible_action(0.5742) is None
+    assert match_plausible_action(0.3491) is None
+
+
+def test_matching_is_a_candidate_not_a_verdict() -> None:
+    """A real crash can land on a clean ratio by chance.
+
+    YESBANK x0.2000 is a documented 1:5 split; a stock halving on bad news
+    reads identically. The matcher cannot separate them and does not claim to
+    -- which is why the triage register carries a second, independent signal.
+    """
+    assert match_plausible_action(0.5000) is not None

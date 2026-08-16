@@ -39,6 +39,7 @@ __all__ = [
     "ReturnAnomaly",
     "ValidationConfig",
     "ValidationReport",
+    "match_plausible_action",
     "validate_adjustment_factors",
     "validate_price_series",
 ]
@@ -266,6 +267,25 @@ def _match_plausible_action(observed: float, tolerance: float) -> tuple[float, s
             best_error = error
             best = (candidate, description)
     return best
+
+
+def match_plausible_action(observed: float, tolerance: float = 0.03) -> tuple[float, str] | None:
+    """Match a price multiplier against ratios corporate actions actually produce.
+
+    Public entry point for the triage tooling. It answers "could this move be a
+    corporate action?" -- **not** "is it one". A genuine crash can land on a
+    clean ratio by chance, which is why the answer is a candidate to check
+    rather than a verdict to apply.
+
+    Args:
+        observed: ``close / previous_close``.
+        tolerance: Relative tolerance. Defaults to the value in
+            :class:`ValidationConfig`.
+
+    Returns:
+        The matched multiplier and its description, or ``None``.
+    """
+    return _match_plausible_action(observed, tolerance)
 
 
 def validate_price_series(

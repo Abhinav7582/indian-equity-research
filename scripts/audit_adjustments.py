@@ -42,12 +42,16 @@ import datetime as dt
 import io
 import sys
 import zipfile
+from collections import defaultdict, deque
 from itertools import pairwise
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from indian_equity_research.market.corporate_actions import ValidationConfig
+from indian_equity_research.market.corporate_actions import (
+    ValidationConfig,
+    match_plausible_action,
+)
 from indian_equity_research.market.nse_corporate_actions import load_actions_json
 
 BHAV = Path("data/raw/bhavcopy")
@@ -137,10 +141,17 @@ def main() -> int:
     # human, because there is nothing to decide.
     seen: set[str] = set()
     listings = 0
+    # Trailing turnover per symbol, for the second signal. A split leaves the
+    # value traded roughly unchanged -- the same money buys more, cheaper
+    # shares. A crash does not: it brings panic volume, and turnover jumps.
+    # The two signals are independent, which is the whole point: a move that
+    # matches a clean ratio AND trades normally is very likely an action, and
+    # one that matches no ratio AND trades 5x is very likely a crash.
+    history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
 
     explained: list[tuple[dt.date, str, float]] = []
     by_market: list[tuple[dt.date, str, float]] = []
-    open_moves: list[tuple[dt.date, str, str, float, float]] = []
+    open_moves: list[tuple[dt.date, str, str, float, float, float, str, str]] = []
 
     files = sorted(BHAV.glob("*.zip"))
     for number, path in enumerate(files, start=1):
@@ -158,6 +169,8 @@ def main() -> int:
             symbol, isin, close, previous, turnover = parsed
             first_session = symbol not in seen
             seen.add(symbol)
+            trailing = list(history[symbol])
+            history[symbol].append(turnover)
             if previous < args.min_price or turnover < args.min_turnover * CRORE:
                 continue
             if previous <= 0:
@@ -181,7 +194,19 @@ def main() -> int:
             ):
                 by_market.append((when, symbol, multiplier))
                 continue
-            open_moves.append((when, symbol, isin, multiplier, turnover / CRORE))
+            typical = sorted(trailing)[len(trailing) // 2] if trailing else 0.0
+            turnover_x = turnover / typical if typical > 0 else 0.0
+            fit = match_plausible_action(multiplier, cfg.ratio_tolerance)
+            ratio_note = fit[1] if fit else "no clean ratio"
+            if fit and 0 < turnover_x < 3.0:
+                hint = "likely action"
+            elif not fit and turnover_x >= 3.0:
+                hint = "likely crash"
+            else:
+                hint = "unclear"
+            open_moves.append(
+                (when, symbol, isin, multiplier, turnover / CRORE, turnover_x, ratio_note, hint)
+            )
 
     total = len(explained) + len(by_market) + len(open_moves) + listings
     print(f"\nlarge moves examined      : {total:,}")
@@ -189,6 +214,9 @@ def main() -> int:
     print(f"  explained by the market : {len(by_market):,}")
     print(f"  listing days (excluded) : {listings:,}")
     print(f"  OPEN, need a human      : {len(open_moves):,}")
+    for label in ("likely action", "likely crash", "unclear"):
+        count = sum(1 for row in open_moves if row[7] == label)
+        print(f"      {label:<14} : {count:,}")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -203,6 +231,14 @@ def main() -> int:
         "* `action` — a real corporate action missing from the NSE feed. Record the",
         "  multiplier and it will be applied.",
         "* `data` — a bhavcopy defect, e.g. a stale previous close.",
+        "",
+        "The **hint** column is a suggestion from two independent signals and is",
+        "not a decision. `ratio fit` asks whether the move matches a multiplier a",
+        "real corporate action produces; `turnover x20d` compares the day's value",
+        "traded against that security's own 20-session median. A split leaves",
+        "turnover roughly unchanged — the same money buys more, cheaper shares —",
+        "while a crash brings panic volume. Agreement between the two is",
+        "informative; disagreement is marked `unclear` and needs reading.",
         "",
         "An unclassified row blocks the security from the backtest. That is",
         "deliberate: a wrongly-adjusted crash vanishes from the record entirely,",
@@ -223,11 +259,14 @@ def main() -> int:
         "",
         "## Register",
         "",
-        "| date | symbol | isin | multiplier | turnover (cr) | verdict | note |",
-        "|---|---|---|---:|---:|---|---|",
+        "| date | symbol | multiplier | turnover x20d | ratio fit | hint | verdict |",
+        "|---|---|---:|---:|---|---|---|",
     ]
-    for when, symbol, isin, multiplier, turnover in sorted(open_moves):
-        lines.append(f"| {when} | {symbol} | {isin} | {multiplier:.4f} | {turnover:,.0f} |  |  |")
+    for when, symbol, _isin, multiplier, _tv, turnover_x, ratio_note, hint in sorted(open_moves):
+        lines.append(
+            f"| {when} | {symbol} | {multiplier:.4f} | {turnover_x:.1f}x | "
+            f"{ratio_note} | {hint} |  |"
+        )
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\nregister written to {OUT}")
     return 0
