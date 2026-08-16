@@ -215,6 +215,10 @@ tests/       Unit and integration suites
   personal holdings snapshot. Fill into `data/reference/portfolio.md`
   (git-ignored). **Never read by the backtester** — see the boundary note in
   the template.
+- [`docs/claims_register.md`](docs/claims_register.md) — external claims
+  encountered outside the project, and why none of them enter the trial
+  register without being formally registered first. Includes a checklist for
+  reading a performance post.
 - [`docs/circulars_worklist.md`](docs/circulars_worklist.md) — **closed.** How
   Nifty 100 membership was reconstructed, the four defects found doing it, and
   the two prefix traps that would have silently built the wrong index
