@@ -27,7 +27,7 @@ governing document for anything evidential — this file may not weaken it.
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**728 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**712 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 

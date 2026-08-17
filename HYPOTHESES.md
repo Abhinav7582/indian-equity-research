@@ -899,6 +899,52 @@ gone.**
 
 ---
 
+## The cost floor, measured
+
+Established 2026-08-18 from the validated cost model, reading **no returns**
+(`docs/breadth_frontier.md`). Cost of one full turnover at ₹3,00,000:
+
+| Holdings | Position | DP | Brokerage | Statutory | **Total** |
+|---:|---:|---:|---:|---:|---:|
+| 10 | ₹30,000 | 0.079% | 0.157% | 0.222% | **0.458%** |
+| 15 | ₹20,000 | 0.118% | 0.236% | 0.222% | **0.576%** |
+| 30 | ₹10,000 | 0.236% | 0.236% | 0.222% | **0.694%** |
+| 50 | ₹6,000 | 0.393% | 0.236% | 0.222% | **0.852%** |
+| 100 | ₹3,000 | 0.787% | 0.393% | 0.222% | **1.402%** |
+
+Three facts follow, none of which depend on any strategy working:
+
+1. **0.222% is the floor nobody escapes.** STT, stamp duty and exchange fees
+   are proportional, so they are the same at every breadth. Any edge must clear
+   this before anything else.
+2. **Brokerage is a second fixed cost, not a rate.** It hits its ₹5 floor below
+   a ₹5,000 order — at 100 names it is 0.393%, *larger than the DP charge at 15
+   names*. The floor was invisible until real contract notes were read.
+3. **Going from 100 names to 10 saves 0.944% per turnover** at ₹3L. That is
+   larger than most claimed edges, and it is certain rather than hoped for.
+
+**The capital equivalence.** 100 names at ₹20,00,000 costs 0.576% — identical
+to 15 names at ₹3,00,000. Breadth is not free; it is bought with capital.
+
+**What the budget actually permits.** The 1.00% cap admits up to 50 holdings if
+every exit fills in a single order, but only **20** if exits take three orders:
+
+| Holdings | 1 order | 1.5 orders | 3 orders |
+|---:|---:|---:|---:|
+| 10 | 0.458% | 0.498% | 0.616% |
+| 15 | 0.576% | 0.635% | 0.812% |
+| 20 | 0.616% | 0.694% | 0.930% |
+| 30 | 0.694% | 0.812% | **1.166%** |
+| 50 | 0.852% | **1.048%** | **1.638%** |
+| 100 | **1.402%** | **1.796%** | **2.976%** |
+
+The permitted breadth is set by *execution*, not by strategy. That is why A7
+requires the orders-per-exit assumption to be reported with every result:
+30 holdings passes at 0.694% and fails at 1.166%, and only the assumption
+separates them.
+
+---
+
 ## Amendment log
 
 | Date | Hypothesis | Change | Reason | Made before testing? |
@@ -909,6 +955,7 @@ gone.**
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
 | 2026-08-10 | all (deployment) | **Amendment A6** — fixed a ₹3,00,000 capital cap, a two-year abandonment test against Baseline B3, and six binding pre-conditions on any future derivatives work including a permanent ban on naked short options | Nothing in this file yet governed what happens *after* a result arrives, which is where retail capital is actually lost. The owner intends to explore F&O eventually; the conditions are cheapest to set honestly while still theoretical | Yes — no strategy result exists, no capital deployed, no derivatives work begun |
 | 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
+| 2026-08-18 | all (portfolio construction) | **Amendment A7** — set a **portfolio breadth budget**: no configuration may be tested whose modelled cost of one full turnover exceeds **1.00% of capital**, which at ₹3,00,000 rules out 100 equal-weight holdings (1.402%) and 50 (0.852% at one order per exit, 1.638% at three). Every result must report the holdings count and the assumed sell orders per exit | Two independent methods agree the ₹3L/100-name configuration is uneconomic before any signal is considered: this project's own engine measured DP at 48.5% of all charges over 11 years, and a broker-tariff analysis reached the same conclusion from first principles. The cost model has since been validated to the paisa against real contract notes. Setting the budget from cost arithmetic — which reads no returns — costs no trial budget and removes the temptation to keep a wide book because one backtest liked it | Yes — no hypothesis tested on the real universe; breadth chosen on cost, not performance |
 
 ---
 
