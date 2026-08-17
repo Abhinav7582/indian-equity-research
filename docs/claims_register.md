@@ -209,3 +209,71 @@ income was removed. TDS applies at 10% above ₹10,000 under s.194 and is a
 credit, not a final tax.
 
 The strategy logic in US dividend material does not transfer.
+
+---
+
+## C4. Evidence dossier, 17 Aug 2026 — reviewed
+
+**Status: accepted, with one correction.** Source in
+`data/reference/inbox/` (git-ignored). 876 lines, three source types
+(Reddit, official, broker), claims graded A–E with mandatory fields.
+
+### The correction: GST on DP
+
+The dossier's headline tables in §3.1 use a bare **₹20** DP charge. Its own
+§3.2 correctly states Groww is **₹20 + 18% GST = ₹23.60**. The tables are
+therefore 18% optimistic, and this project's cost model already has it right
+(`costs.py: dp_charge_per_scrip = 20.0`, GST applied).
+
+| Names at ₹3L | Dossier (₹20) | Correct (₹23.60) |
+|---:|---:|---:|
+| 15 | 0.100% | **0.118%** |
+| 20 | 0.133% | 0.157% |
+| 100 | 0.667% | **0.787%** |
+
+This overturns the dossier's stated "central project insight". ₹3L does **not**
+give 15 names a 0.10% DP threshold — it gives 0.118%, and ₹3.54L would be
+needed. The conclusion (go narrow) survives; the specific number does not.
+
+### Broker choice is worth more than most signal edges
+
+Zerodha ₹13 + GST = ₹15.34 against Groww's ₹23.60 — **54% cheaper per sell
+scrip**.
+
+| Names | Groww / turnover | Zerodha / turnover | Saving at 4 turnovers/yr |
+|---:|---:|---:|---:|
+| 15 | 0.118% | 0.077% | **0.17%/yr** |
+| 100 | 0.787% | 0.511% | **1.10%/yr** |
+
+Free, certain, and available before any research is done.
+
+### Independent convergence
+
+This project measured DP at **48.5% of all charges** by running the engine over
+2015–2026. The dossier reaches the same conclusion from broker tariffs and
+first principles. Two independent routes, same answer — the strongest form this
+finding could take.
+
+### The headline negative result
+
+No post in the corpus meets grade A, B, or a strong C. **No ≥3-year,
+real-money, broker-verified, after-cost, after-tax record beating NIFTY TRI
+with disclosed capital, turnover and drawdown.** Not "the strategies are bad" —
+"the evidence does not exist". §9 lists ten such absences explicitly, including
+the honest note that absence of a located post is not absence of a post.
+
+### The breadth experiment — and how to run it without spending trials
+
+§6.5 proposes N ∈ {10, 15, 20, 30, 50, 100}. Correct and worth doing, but
+naively it is **six trials** in the Deflated Sharpe denominator.
+
+It need not be. Split it:
+
+1. **Cost study — free.** DP drag, turnover and distinct sell-ISIN events by
+   breadth are *deterministic* given a turnover schedule. No returns are read,
+   so no selection occurs. Choose the breadth budget on cost grounds here.
+2. **Performance test — costs trials.** Only after breadth is fixed, and
+   registered as a trial before the result is read.
+
+Choosing breadth by which N produced the best backtest is exactly the selection
+the gates exist to catch. Choosing it by cost arithmetic first is not.
