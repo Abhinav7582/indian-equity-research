@@ -193,9 +193,26 @@ class EngineConfig:
     # longest real NSE closure in modern history is a handful of days. Set to
     # None only when a gap is known to be genuine, and say why at the call site.
     max_session_gap_days: int | None = 10
+    # Sell orders the engine assumes each exit takes. The DP charge is levied
+    # **per sell order**, not per position -- verified against a real contract
+    # note where one security sold in two orders was charged twice
+    # (docs/cost_model_validation.md).
+    #
+    # The default of 1 is the OPTIMISTIC case: every exit fills in a single
+    # order. Real execution splits when liquidity requires it, and each slice
+    # costs another Rs 23.60. This is exposed and reported rather than assumed
+    # silently, because at Rs 3,000 positions it is the difference between a
+    # 0.79% and a 1.18% cost of one full turnover.
+    sell_orders_per_exit: float = 1.0
 
     def __post_init__(self) -> None:
         """Reject configurations that cannot describe a real portfolio."""
+        if self.sell_orders_per_exit < 1.0:
+            raise ValueError(
+                f"sell_orders_per_exit must be at least 1, got {self.sell_orders_per_exit}. "
+                f"An exit takes at least one order; a value below 1 would model a "
+                f"position leaving the book without being sold."
+            )
         if self.initial_capital <= 0:
             raise ValueError(f"initial_capital must be positive, got {self.initial_capital}")
         if self.minimum_trade_value < 0:
@@ -436,7 +453,9 @@ def _fill(
     if quantity <= 0 or turnover < cfg.minimum_trade_value:
         return cash
 
-    charges = charges_for(turnover, side, when, schedule=cfg.schedule)
+    charges = charges_for(
+        turnover, side, when, schedule=cfg.schedule, sell_orders=cfg.sell_orders_per_exit
+    )
     if side is Side.BUY and turnover + charges.total > cash + _EPSILON:
         # Trim to what the cash will actually bear, charges included, rather
         # than allowing an overdraft the constraint forbids.
@@ -447,7 +466,9 @@ def _fill(
         turnover = quantity * price
         if turnover < cfg.minimum_trade_value:
             return cash
-        charges = charges_for(turnover, side, when, schedule=cfg.schedule)
+        charges = charges_for(
+            turnover, side, when, schedule=cfg.schedule, sell_orders=cfg.sell_orders_per_exit
+        )
 
     fill = Fill(when, symbol, side, int(quantity), price, charges)
     result.fills.append(fill)

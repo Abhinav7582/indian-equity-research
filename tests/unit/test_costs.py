@@ -7,6 +7,7 @@ change the cost assumptions every backtest depends on.
 
 from __future__ import annotations
 
+import datetime as dt
 from datetime import date
 
 import pytest
@@ -131,3 +132,96 @@ class TestEdgeCases:
     def test_negative_turnover_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="must not be negative"):
             charges_for(-100, Side.BUY, WHEN)
+
+
+# ---------------------------------------------------------------------------
+# Validated against real Groww contract notes
+# ---------------------------------------------------------------------------
+#
+# These are not illustrative figures. They are the charges actually paid, and
+# they reconcile against the funds ledger to the paisa. See
+# docs/cost_model_validation.md.
+
+
+def test_dp_charge_matches_the_real_contract_note() -> None:
+    """Rs 20 + 18% GST = Rs 23.60, split CDSL Rs 3.50 + Groww Rs 16.50."""
+    charge = charges_for(20_000.0, Side.SELL, dt.date(2026, 8, 11))
+    assert charge.dp_charge == pytest.approx(20.0)
+    assert charge.fixed_component == pytest.approx(23.60)
+
+
+def test_a_buy_never_pays_a_dp_charge() -> None:
+    """Confirmed on both notes: DP appears only against sells."""
+    assert charges_for(20_000.0, Side.BUY, dt.date(2026, 8, 11)).dp_charge == 0.0
+
+
+def test_the_11_august_2026_day_reconciles() -> None:
+    """The day that proved DP is charged per ORDER, not per scrip.
+
+    Two securities were sold. One of them -- Jio Financial -- went out in two
+    separate orders. The contract note charged **three** DP events:
+
+        Ltm Limited        1 sell order
+        Jio Fin Services   2 sell orders   (-8, then -20)
+        ---------------------------------
+        2 scrips, 3 orders  ->  Rs 70.80
+
+    Per-scrip-per-day would predict Rs 47.20. The note says Rs 70.80, so the
+    unit is the order. Charging per position -- which is what the engine does
+    when it models one order per exit -- is the OPTIMISTIC case.
+    """
+    per_order = charges_for(5_000.0, Side.SELL, dt.date(2026, 8, 11)).fixed_component
+    assert per_order == pytest.approx(23.60)
+    assert 3 * per_order == pytest.approx(70.80)
+    assert 2 * per_order == pytest.approx(47.20), "the per-scrip reading, which the note refutes"
+
+
+def test_the_4_august_2026_day_reconciles() -> None:
+    """Six securities, six sell orders, seven fills.
+
+    One order filled in two trades and was charged **once**, so the unit is not
+    the fill either.
+    """
+    per_order = charges_for(5_000.0, Side.SELL, dt.date(2026, 8, 4)).fixed_component
+    assert 6 * per_order == pytest.approx(141.60)
+
+
+def test_the_brokerage_floor_binds_at_realistic_position_sizes() -> None:
+    """Brokerage is a second fixed cost at this account size, not a rate.
+
+    On 11 August 2026, ten orders produced Rs 51.61 of brokerage -- an average
+    of Rs 5.16, meaning almost every order hit the Rs 5 minimum rather than the
+    0.1% rate. Any position below Rs 5,000 pays the floor.
+    """
+    small = charges_for(1_897.0, Side.BUY, dt.date(2026, 8, 11))
+    assert small.brokerage == pytest.approx(5.0), "0.1% of Rs 1,897 is Rs 1.90; the floor binds"
+    large = charges_for(50_000.0, Side.BUY, dt.date(2026, 8, 11))
+    assert large.brokerage == pytest.approx(20.0), "0.1% of Rs 50,000 is Rs 50; the cap binds"
+
+
+def test_a_split_exit_pays_the_dp_charge_once_per_order() -> None:
+    """The correction the contract note forced.
+
+    Modelling one order per exit is optimistic. An exit worked in three slices
+    pays Rs 23.60 three times, and nothing else about the trade changes.
+    """
+    one = charges_for(20_000.0, Side.SELL, dt.date(2026, 8, 11), sell_orders=1)
+    three = charges_for(20_000.0, Side.SELL, dt.date(2026, 8, 11), sell_orders=3)
+    assert three.dp_charge == pytest.approx(3 * one.dp_charge)
+    assert three.total - one.total == pytest.approx(2 * 23.60)
+    # Everything that scales with turnover is untouched.
+    assert three.stt == pytest.approx(one.stt)
+    assert three.brokerage == pytest.approx(one.brokerage)
+
+
+def test_splitting_a_buy_costs_nothing_extra() -> None:
+    """No DP charge on the buy side, so the parameter must not leak into it."""
+    one = charges_for(20_000.0, Side.BUY, dt.date(2026, 8, 11), sell_orders=1)
+    five = charges_for(20_000.0, Side.BUY, dt.date(2026, 8, 11), sell_orders=5)
+    assert five.total == pytest.approx(one.total)
+
+
+def test_fewer_than_one_order_per_exit_is_refused() -> None:
+    """A position cannot leave the book without being sold."""
+    with pytest.raises(ValueError, match="at least 1"):
+        charges_for(20_000.0, Side.SELL, dt.date(2026, 8, 11), sell_orders=0.5)

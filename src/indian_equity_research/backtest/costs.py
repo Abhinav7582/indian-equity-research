@@ -6,17 +6,44 @@ Indian schedule punish small portfolios specifically:
 
 * **STT is charged on both legs** of a delivery trade at 0.1% each, so a round
   trip pays 0.2% in securities transaction tax alone.
-* **DP charges are a flat rupee amount per scrip per sell day**, not a
-  percentage. At a ₹25,000 position that is 0.09%; at ₹5,000 it is 0.47%. A
-  flat-bps cost model hides this entirely, and it is precisely the term that
-  makes a many-small-positions strategy unviable.
+* **DP charges are a flat rupee amount per SELL ORDER**, not a percentage. At a
+  ₹25,000 order that is 0.09%; at ₹5,000 it is 0.47%. A flat-bps cost model
+  hides this entirely, and it is precisely the term that makes a
+  many-small-positions strategy unviable.
 
 Rates are versioned by effective date. They change - STT on delivery was
 altered in the 2024 budget cycle - and a backtest spanning a rate change that
 applies today's schedule throughout is quietly wrong.
 
-Sources: Groww published pricing and exchange circulars, retrieved
-2026-08-04. **Verify before relying on these for live trading.**
+This schedule is **Groww-specific**
+-----------------------------------
+Validated to the paisa against real contract notes for 4 and 11 August 2026,
+and reconciled against the funds ledger. See ``docs/cost_model_validation.md``.
+
+Two brokers are not interchangeable here, and the difference is not only the
+rate:
+
+===============  ==========================  ==============================
+Broker           DP charge                   Charging unit
+===============  ==========================  ==============================
+Groww            ₹20 + 18% GST = ₹23.60      **per sell order**
+Zerodha          ₹13 + 18% GST = ₹15.34      per scrip per day
+===============  ==========================  ==============================
+
+The unit matters more than the rate. On 11 August 2026 one security was sold in
+two orders and was charged **twice** -- ₹70.80 for two securities, not ₹47.20.
+Under Zerodha's rule the same day would have cost ₹30.68.
+
+What this module does NOT charge
+--------------------------------
+The ledger for the same account also carries margin interest, pledge and DDPI
+fees, and a periodic account charge -- none of which appear on a contract note
+and none of which are modelled here. That is correct for a pure cash-delivery
+strategy and wrong for anything financed. See the validation document.
+
+Sources: Groww published pricing and exchange circulars, retrieved 2026-08-04;
+contract notes and funds ledger, 2026-08-18. **Verify before relying on these
+for live trading.**
 """
 
 from __future__ import annotations
@@ -59,8 +86,10 @@ class CostSchedule:
         sebi_turnover_rate: SEBI turnover fee.
         ipft_rate: Investor protection fund contribution.
         gst_rate: GST, applied to brokerage and the exchange-side fees.
-        dp_charge_per_scrip: Flat depository charge per scrip on a sell day,
-            before GST.
+        dp_charge_per_sell_order: Flat depository charge per **sell order**,
+            before GST. Not per scrip and not per fill: an order filled in two
+            trades is charged once, while a security sold in two orders is
+            charged twice. Verified against the 11 August 2026 contract note.
     """
 
     effective_from: date
@@ -75,7 +104,7 @@ class CostSchedule:
     sebi_turnover_rate: float = 0.000001
     ipft_rate: float = 0.000001
     gst_rate: float = 0.18
-    dp_charge_per_scrip: float = 20.0
+    dp_charge_per_sell_order: float = 20.0
 
 
 #: Schedules in effect order. Extend rather than edit: a backtest spanning a
@@ -164,7 +193,7 @@ class ChargeBreakdown:
     def fixed_component(self) -> float:
         """Charges that do not scale with order size, inclusive of GST.
 
-        The DP charge is a flat rupee amount per sell. It is 0.09% of a
+        The DP charge is a flat rupee amount per sell order. It is 0.09% of a
         Rs 25,000 position and 0.47% of a Rs 5,000 one - the term that makes a
         many-small-positions strategy unviable, and the one a flat
         basis-point cost model hides completely.
@@ -186,25 +215,36 @@ class ChargeBreakdown:
 
 
 def charges_for(
-    turnover: float, side: Side, when: date, *, schedule: CostSchedule | None = None
+    turnover: float,
+    side: Side,
+    when: date,
+    *,
+    schedule: CostSchedule | None = None,
+    sell_orders: float = 1.0,
 ) -> ChargeBreakdown:
-    """Compute every charge on a single delivery order.
+    """Compute every charge on a delivery exit or entry.
 
     Args:
-        turnover: Order value in rupees. Must not be negative.
+        turnover: Total value in rupees. Must not be negative.
         side: Buy or sell.
         when: Trade date, used to select the rate schedule.
         schedule: Explicit schedule, overriding date-based selection.
+        sell_orders: How many sell orders the exit takes. The DP charge is
+            levied **per order**, so an exit worked in three slices pays it
+            three times. Ignored on the buy side, where no DP charge applies.
+            Defaults to 1, which is the optimistic case.
 
     Returns:
         The itemised breakdown.
 
     Raises:
-        ValueError: If ``turnover`` is negative.
+        ValueError: If ``turnover`` is negative or ``sell_orders`` is below 1.
     """
     if turnover < 0:
         message = f"turnover must not be negative, got {turnover}."
         raise ValueError(message)
+    if sell_orders < 1.0:
+        raise ValueError(f"sell_orders must be at least 1, got {sell_orders}")
     if turnover == 0:
         cfg = schedule or schedule_for(when)
         return ChargeBreakdown(0.0, side, 0, 0, 0, 0, 0, 0, 0, 0, cfg.gst_rate, cfg.label)
@@ -219,7 +259,7 @@ def charges_for(
     exchange = turnover * cfg.exchange_txn_rate
     sebi = turnover * cfg.sebi_turnover_rate
     ipft = turnover * cfg.ipft_rate
-    dp = 0.0 if is_buy else cfg.dp_charge_per_scrip
+    dp = 0.0 if is_buy else cfg.dp_charge_per_sell_order * sell_orders
     gst = (brokerage + exchange + sebi + ipft + dp) * cfg.gst_rate
 
     return ChargeBreakdown(
