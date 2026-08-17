@@ -279,3 +279,46 @@ def test_a_non_object_item_is_refused() -> None:
 def test_an_empty_response_is_not_an_error() -> None:
     """Quiet quarters exist and must not be confused with a failed download."""
     assert load_actions_json("[]") == []
+
+
+# ---------------------------------------------------------------------------
+# "Re" is the singular of rupee
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [
+        # All verbatim from the feed. Every one is a split down to a Re 1 face
+        # value, and every one silently yielded no ratio until "Re" was accepted.
+        ("Face Value Split (Sub-Division) - From Rs 10/- Per Share To Re 1/- Per Share", 0.1),
+        ("Face Value Split (Sub-Division) - From Rs 5/- Per Share To Re 1/- Per Share", 0.2),
+        ("Face Value Split (Sub-Division) - From Rs 2/- Per Share To Re 1/- Per Share", 0.5),
+        ("Face Value Split From Rs 10 To Re 2", 0.2),
+        ("Face Value Split (Sub-Division): From Rs 10/- Per Share To Re 1/- Per Share", 0.1),
+        ("Face Value Split (Sub-Division) - From Rs10/- Per Share To Re 1/- Per Share", 0.1),
+        ("Face Value Split (Sub-Division) - From Rs 10 Per Share To Re 1 Per Share", 0.1),
+    ],
+)
+def test_a_split_to_a_one_rupee_face_value_is_read(subject: str, expected: float) -> None:
+    """The single defect that hid 29 real splits.
+
+    In Indian usage "Re" is the singular of rupee, used for exactly one. NSE
+    therefore writes every split down to a Re 1 face value as "To Re 1/-".
+    Accepting only "Rs" dropped the ratio from all of them -- NESTLEIND,
+    TATASTEEL, DRREDDY, KOTAKBANK, EICHERMOT among others -- and each then
+    appeared in the adjustment audit as an unexplained collapse rather than a
+    documented corporate action.
+
+    The failure direction is the dangerous one: a real split left unadjusted
+    puts a fake -90% return into the price series.
+    """
+    action = parse_action_record(record(subject=subject))
+    assert action is not None
+    assert action.price_multiplier == pytest.approx(expected)
+
+
+def test_the_rupee_abbreviation_does_not_loosen_the_match() -> None:
+    """Accepting "Re" must not make the pattern fire on unrelated prose."""
+    assert parse_subject("Reduction of capital").ratio_from is None
+    assert parse_subject("Redemption of preference shares").ratio_from is None

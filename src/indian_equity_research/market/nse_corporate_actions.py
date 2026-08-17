@@ -100,9 +100,16 @@ _MONTHS: Final = frozenset(
 
 # "From Rs 10/- Per Share To Rs 5/- Per Share", and the several ways NSE has
 # punctuated it. Decimals are real: face values of 2.50 and 0.50 both occur.
+#
+# **"Re", not just "Rs".** In Indian usage "Re" is the singular of rupee, used
+# for exactly one: "From Rs 10/- Per Share To **Re 1**/- Per Share". Accepting
+# only "Rs" silently dropped the ratio from every split down to a Re 1 face
+# value -- 29 real splits in the 2015-2026 archive, including NESTLEIND,
+# TATASTEEL, DRREDDY, KOTAKBANK and EICHERMOT. Each looked like an unexplained
+# price collapse rather than a documented corporate action.
 _FACE_SPLIT_RE: Final = re.compile(
-    r"from\s*(?:rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*/?-?\s*(?:per\s+share)?\s*"
-    r"to\s*(?:rs\.?|inr)?\s*(\d+(?:\.\d+)?)",
+    r"from\s*(?:rs\.?|re\.?|inr)?\s*(\d+(?:\.\d+)?)\s*/?-?\s*(?:per\s+share)?\s*"
+    r"to\s*(?:rs\.?|re\.?|inr)?\s*(\d+(?:\.\d+)?)",
     re.IGNORECASE,
 )
 _BONUS_RATIO_RE: Final = re.compile(r"(\d+)\s*[:\-/]\s*(\d+)")
