@@ -16,7 +16,7 @@ governing document for anything evidential — this file may not weaken it.
 | 1.5 | H4 regime overlay experiment | **Done — H4 REJECTED** |
 | 2 | Data layer: archiver, calendar, instrument master, validator, bhavcopy ingest, delisting register, adjustment engine | **Done** |
 | 3a | Universe construction | **Done — real Nifty 100 reconstructed.** Membership continuous July 2015 → August 2026, net size change zero. A5 proxy retained as scaffolding only |
-| 3b | Adjusted price series pipeline | **Audit complete — 0 outstanding.** Of 487 large moves in liquid names: 270 explained by a documented action, 138 listing days, 12 market-wide, 67 hand-adjudicated (6 real actions, 61 crashes). Four lookup bugs found and fixed along the way: `Re` vs `Rs`, symbol-vs-ISIN matching, the date-ranged endpoint omitting renamed/delisted names, and `&` breaking a URL. Remaining: wire the adjustments into the backtest path |
+| 3b | Adjusted price series pipeline | **Done.** Of 487 large moves in liquid names: 270 explained by a documented action, 138 listing days, 12 market-wide, 67 hand-adjudicated (6 real actions, 61 crashes). Four lookup bugs found and fixed along the way: `Re` vs `Rs`, symbol-vs-ISIN matching, the date-ranged endpoint omitting renamed/delisted names, and `&` breaking a URL. **Wired in** via backtest/prices.py: build_bars() serves back-adjusted OHLC and refuses while the audit is incomplete. A residual-move guard catches splits the audit could not reach (TIDEWATER, below the liquidity threshold and renamed to VEEDOL) |
 | 3c | Transaction cost model | **Done** |
 | 3d | Event-driven engine | **Done** |
 | 3e | Self-deception suite, mutation-tested | **Done** |
@@ -27,7 +27,7 @@ governing document for anything evidential — this file may not weaken it.
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**720 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**731 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 
