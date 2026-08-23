@@ -106,7 +106,13 @@ calendar; Nifty 100 TRI.
 **Note on scope.** H1 is a statement about **gross cross-sectional structure
 only**. It says nothing about whether the effect is tradeable. That is H2.
 
-**Status:** `NOT_TESTED`
+**Status:** `REJECTED` on the development window (trial #3, 2026-08-23).
+Mean rank IC **+0.0378** (passes) but Newey-West **|t| = 1.47** against a
+required 3.0, and the D10−D1 spread was positive in only **2 of 5**
+non-overlapping sub-periods. Monotonicity **+0.758** passes. The decisive
+detail: **decile 10 returned −0.138% per month** while D8 and D9 returned
++0.376% and +0.403% — the effect, such as it is, is absent from the very top of
+the distribution, which is where H2's portfolio lived.
 **Registered:** 2026-08-04
 
 ---
@@ -997,7 +1003,8 @@ Sharpe Ratio.
 | # | Date | Hypothesis | Configuration | Data snapshot | Commit | Outcome |
 |---|---|---|---|---|---|---|
 | **1** | 2026-08-06 | **H4** | A2 regime rule as declared: Nifty 100 < 200d SMA AND India VIX > trailing 756d 80th pct; monthly evaluation; 1-period lag; 0.55% round trip; 20% STCG; cash at 0% | NSE Indices + NSE: Nifty 100 PR 2003-2026, Momentum 30 TRI 2005-2026, India VIX 2010-2026, Momentum30+G-Sec 75:25 2011-2026 | `5fed927` | **REJECTED** (see below) |
-| **2** | 2026-08-23 | **H2** | A9 as declared: 10 holdings, top decile of 12-1 momentum in the point-in-time Nifty 100, equal weight, monthly, decided on previous close and filled at next open, ₹3,00,000, 1 sell order per exit | Bhavcopy 2015-2026 back-adjusted; NSE corporate actions; reconstructed point-in-time Nifty 100; Nifty 100 TRI | *pending* | **REJECTED** (see below) |
+| **2** | 2026-08-23 | **H2** | A9 as declared: 10 holdings, top decile of 12-1 momentum in the point-in-time Nifty 100, equal weight, monthly, decided on previous close and filled at next open, ₹3,00,000, 1 sell order per exit | Bhavcopy 2015-2026 back-adjusted; NSE corporate actions; reconstructed point-in-time Nifty 100; Nifty 100 TRI | `d36ea3e` | **REJECTED** (see below) |
+| **3** | 2026-08-23 | **H1** | As registered: 12-1 momentum deciles within the point-in-time Nifty 100, forward one-month excess return over the Nifty 100 TRI, monthly, **gross** | Same as trial #2 | *pending* | **REJECTED** (see below) |
 
 ---
 
@@ -1146,6 +1153,87 @@ weak result rather than a confirmation.
 
 ---
 
+### Trial #3 detail — H1 momentum monotonicity
+
+**Run:** 2026-08-23 · **Window:** 2016-02-09 to 2021-11-01, 70 monthly
+rebalances, 94-101 securities ranked per date. **Gross.** Holdout untouched.
+
+| Criterion | Observed | Required | Outcome |
+|---|---|---|---|
+| Mean rank IC | **+0.0378** | > 0 | PASS |
+| Newey-West \|t\| on mean IC | **1.47** (naive 1.30, lag 3) | ≥ 3.0 | **FAIL** |
+| Decile monotonicity | **+0.758** | ≥ 0.6 | PASS |
+| D10−D1 positive in sub-periods | **2 of 5** | ≥ 3 of 5 | **FAIL** |
+
+**Decile mean excess return, per month, gross:**
+
+```
+D1   -0.599%      D6   -0.240%
+D2   -0.198%      D7   -0.320%
+D3   -0.441%      D8   +0.376%
+D4   -0.445%      D9   +0.403%
+D5   -0.425%      D10  -0.138%   <-- the decile H2 traded
+```
+
+**The finding, and it explains trial #2 exactly.** The effect is not absent —
+the mean IC is positive, its magnitude is ordinary for a real monthly factor,
+and monotonicity clears its threshold. What fails is the **top decile**, which
+is the only part a ten-name portfolio can hold.
+
+D10 was positive in **32 of 70 months (46%)** — worse than a coin flip — where
+D9 managed 57% and D8 59%. H2 bought D10 every month for 5.89 years and lost
+3.32% a year gross. H1 says why: it bought the one decile in the upper half
+that did not work.
+
+**Sub-period instability, which is the other failure:**
+
+```
+2016-02 .. 2017-03    -0.427% / month
+2017-04 .. 2018-05    +1.992%
+2018-06 .. 2019-07    +3.645%
+2019-08 .. 2020-09    -2.559%
+2020-10 .. 2021-11    -0.346%
+```
+
+A spread that ranges from +3.6% to −2.6% per month across five equal blocks is
+not a stable effect. The D10−D1 spread was positive in 43 of 70 individual
+months (61%), so the sign is more often right than wrong; the losing months are
+simply much larger.
+
+**A post-hoc check, recorded as a diagnostic and explicitly not as a result.**
+Excluding the four COVID-window rebalances (March–June 2020) raises monotonicity
+to +0.867 and the D10−D1 spread to +0.99% per month. It does **not** change the
+verdict, and it must not: choosing which months to exclude after seeing the
+answer is the exact selection this register exists to prevent. It is recorded
+for one reason only — even with COVID removed, **D10 (+0.03%) still trails D8
+(+0.42%) and D9 (+0.48%)**. The top-decile weakness is not a COVID artefact.
+
+**What this establishes.** Within the Nifty 100, 12-1 momentum carries weak
+positive cross-sectional information that is not statistically distinguishable
+from noise at the registered bar, is unstable across sub-periods, and is
+**absent in the extreme top decile** where a small concentrated portfolio must
+operate.
+
+**What it does not establish.** That momentum is absent from Indian equities.
+The Nifty 100 is the largest, most-researched hundred names in the market. This
+says nothing about mid-caps, and NSE's own momentum index draws from the Nifty
+200 rather than the 100.
+
+**A trap worth naming.** "Trade D8 and D9 instead of D10" is the obvious
+reading and it is exactly the move the trial register exists to make expensive.
+The rank at which an effect lives was not registered in advance; picking it now,
+from this output, is selection. Testing it is legitimate and requires a new
+dated amendment before the run — and it would be trial #4, raising the Deflated
+Sharpe bar for whatever eventually passes.
+
+**Consequence under Amendment A1.** A1 named H3, H4 and H6 as the only plausible
+sources of edge over a 0.22% momentum ETF, on the assumption that momentum
+itself worked. H4 is rejected, H2 is rejected, and H1 now says the underlying
+effect is weak and unstable in this universe. **All three of A1's candidate
+sources rested on a foundation that has not held.**
+
+---
+
 ## The cost floor, measured
 
 Established 2026-08-18 from the validated cost model, reading **no returns**
@@ -1209,10 +1297,14 @@ separates them.
 ---
 
 *Every hypothesis in this file was registered before the data to test it
-existed. **Two** trials have since been run and are recorded in the trial
-register — **#1, H4, rejected** and **#2, H2, rejected** — and the price archive
-runs 2015-2026. No result has been observed for **H1, H3, H5 or H6**. The
+existed. **Three** trials have since been run and are recorded in the trial
+register — **#1 H4**, **#2 H2** and **#3 H1**, all rejected — and the price
+archive runs 2015-2026. No result has been observed for **H3, H5 or H6**. The
 declared holdout, 2022-01-01 to 2025-12-31, remains **untouched**.*
+
+*Three rejections is not a failure of the project. It is the project working:
+each was rejected against criteria fixed before the data existed, and none
+required an argument about what the criteria should have said.*
 
 *This closing note previously read "No backtest has been run. No market data
 has been ingested." Both statements were true when written and had quietly

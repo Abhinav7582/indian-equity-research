@@ -22,12 +22,12 @@ governing document for anything evidential — this file may not weaken it.
 | 3e | Self-deception suite, mutation-tested | **Done** |
 | 3f | Statistical gates (DSR, PBO) | **Done** |
 | 3g | Purged / embargoed walk-forward CV | **Done** |
-| 4 | Hypothesis testing on the real universe | **H2 REJECTED** (trial #2, 2026-08-23). Top decile of 12-1 momentum, 10 names, monthly, on the point-in-time Nifty 100: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI over 2016-02 to 2021-12. The signal lost **3.32% annualised before any cost**; charges (1.92%) and tax (1.28%) took it to −6.28%. **Costs were not the cause.** Holdout untouched. H1, H3, H5, H6 still untested |
+| 4 | Hypothesis testing on the real universe | **H2 and H1 both REJECTED** (trials #2 and #3, 2026-08-23). H2: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI; the signal lost **3.32% before any cost**, so costs were not the cause. H1 then explained why — mean rank IC **+0.0378** with **t = 1.47** (needs 3.0), spread positive in **2 of 5** sub-periods, and **decile 10 returned −0.138%/month** against D9's +0.403%. The effect is weak, unstable, and absent from the top decile a small book must hold. Holdout untouched. H3, H5, H6 untested |
 | 5 | Allocation system | Not started |
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**861 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**875 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 
