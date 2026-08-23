@@ -125,7 +125,9 @@ profitable strategy are different claims. Novy-Marx & Velikov (*RFS* 29(1),
 2016) show that transaction costs eliminate a large fraction of documented
 anomalies outright. Indian costs are heavier than the US equivalents on the
 dimensions that matter here: STT is charged on **both** legs of a delivery
-trade, and DP charges are a **flat rupee amount per sell scrip**, which
+trade, and DP charges are a **flat rupee amount per sell order**
+(*corrected by Amendment A8; registered as "per sell scrip", which is
+Zerodha's rule and not the one this account is charged under*), which
 penalises small positions specifically. **H2 is the hypothesis that decides
 whether this project has a reason to continue.**
 
@@ -149,7 +151,12 @@ versioned by effective date, plus a spread/slippage model.
   excess return.
 - Maximum drawdown exceeds 1.3× the benchmark's over the same window.
 
-**Status:** `NOT_TESTED`
+**Status:** `REJECTED` on the development window (trial #2, 2026-08-23).
+Net CAGR **10.85%** against **17.13%** for the Nifty 100 TRI net of a 0.20%
+expense ratio, over 2016-02-09 to 2021-12-31. The signal lost by **3.32%
+annualised before any cost**; charges and tax took the deficit to 6.28%.
+The declared holdout was **not** touched — a strategy that fails in development
+does not get to spend it.
 **Registered:** 2026-08-04
 
 ---
@@ -827,6 +834,160 @@ and each such amendment is logged as a trial.**
 
 ---
 
+# AMENDMENT A8 — DP charging unit corrected against real contract notes
+
+**Date: 2026-08-23** · **Made before any hypothesis was tested on stock-level
+data.**
+
+## Why this exists
+
+H2's rationale asserted that DP charges are "a flat rupee amount **per sell
+scrip**". That is Zerodha's rule. It is not the rule this account is charged
+under, and the difference is not cosmetic.
+
+Two Groww contract notes settle it (`docs/cost_model_validation.md`):
+
+```
+4 August 2026    6 scrips, 6 sell orders, 7 trades   DP Rs 141.60 = 6 x 23.60
+11 August 2026   2 scrips, 3 sell orders             DP Rs  70.80 = 3 x 23.60
+```
+
+Jio Financial was sold in **two orders on one day and charged twice**.
+Per-scrip-per-day predicts ₹47.20; the note says ₹70.80. The 4 August note
+rules out per-trade in the other direction: one order filled in two trades was
+charged once.
+
+Both days reconcile to the paisa against the funds ledger, DP included.
+
+## What changes
+
+1. The rationale text in **H2** is corrected in place, with a pointer here. The
+   registered *claim* is untouched: DP is still a flat rupee cost that
+   penalises small positions. Only the unit it is levied on was wrong.
+2. **Nothing in any rejection criterion changes.** The correction makes modelled
+   costs equal or higher, never lower, so it cannot turn a rejection into a
+   pass.
+3. Every result must continue to report its **orders-per-exit assumption**, as
+   Amendment A7 already requires. The unit correction is what makes that
+   assumption load-bearing rather than decorative: at one order per exit the
+   two rules agree, and they diverge only as execution splits.
+
+## Why this is a correction and not a relaxation
+
+The direction matters. A pre-registered document may be corrected freely
+towards **stricter** costs; the same edit in the other direction would be
+indistinguishable from fitting the rules to a result. Per-order is weakly more
+expensive than per-scrip for every possible execution, and strictly more
+expensive whenever any position exits in more than one order. This amendment
+can only make H2 harder to pass.
+
+## The general rule this sets
+
+Rates in the cost model came from documentation. Documentation was wrong about
+the charging unit while being right about the rate — a class of error that no
+amount of re-reading the tariff page would have caught, because the tariff page
+says what is charged and not what it is charged *per*.
+
+**Any cost parameter not yet checked against a real settled transaction is
+marked as documented-only until it is.** `docs/cost_model_validation.md` is the
+register of which is which.
+
+## Still unresolved, and stated rather than buried
+
+The Groww ledger contains charges the engine does not model at all:
+`TURNOVER_COLLECTED` (₹2,264.80, one debit, meaning unknown) and
+`INTEREST_ACCRUED` (₹0.69 every day without a break, alongside pledge and DDPI
+charges — the signature of a margin facility rather than plain delivery).
+
+Neither is answerable from the file. Until they are, **measured account costs
+exceed modelled trading costs by an amount that has not been quantified**, and
+no H2 result may be described as a full accounting of what the account paid.
+
+---
+
+# AMENDMENT A9 — H2 portfolio specification declared
+
+**Date: 2026-08-23** · **Made before the momentum signal was implemented and
+before any stock-level backtest was run.**
+
+## Why this exists
+
+H2 says a portfolio of "the highest-ranked momentum names" beats the Nifty 100
+TRI net of costs. It never said **how many names**, how they are weighted, or
+when they are bought. Those are not details; they change the answer. Leaving
+them open until the first run means choosing them while a result is visible,
+which is selection whatever it is called afterwards.
+
+Everything below is fixed now, in advance, and each choice is justified from
+reasoning that reads **no returns**.
+
+## The specification — binding
+
+| Parameter | Declared value |
+|---|---|
+| Universe | Point-in-time Nifty 100 on the rebalance date (`market/membership.py`) |
+| Signal | 12-1 momentum: total return over the trailing 12 months, excluding the most recent month — **as registered in H1** |
+| Holdings | **10** — the top decile |
+| Weighting | Equal, at the rebalance |
+| Cadence | Monthly, first session of the month |
+| Decision data | Closes up to and including the previous session |
+| Execution | Next session's open, as the engine already enforces |
+| Minimum history | 252 sessions, so the 12-1 window is complete rather than partial |
+| Eligibility | Must have traded on the decision date |
+| Leaving the index | The book is rebuilt from current members each month, so a departed name is simply not re-selected. No forced intra-month sale |
+| Delisting | Amendment A4, both bands reported |
+| Orders per exit | Reported at 1, 1.5 and 3 (A7). **1.5 is the measured rate** from the 11 August contract note |
+| Capital | ₹3,00,000 (A6) |
+
+## Why ten, and not any other number
+
+**Because H1 tests decile 10.** H1's rejection criteria are written about the
+top decile of a hundred-name universe. If H2 holds twenty names it is a
+different portfolio, and neither outcome answers the question H2 was registered
+to ask: *is the effect H1 measures tradeable?* A positive result would not be
+attributable to decile 10, and a negative result could be dilution from names
+11–20 rather than costs.
+
+**And because it is the cheapest configuration A7 permits.** One full turnover
+at ₹3,00,000 costs 0.458% at one sell order per exit, 0.498% at the measured
+1.5, and 0.616% at three. It clears the 1.00% budget under every execution
+assumption, with the widest margin of any breadth considered.
+
+Both reasons read no returns. Neither was chosen because a backtest liked it.
+
+**The cost of this choice, stated rather than discovered later.** Ten equal
+positions of ₹30,000 is concentrated. One position is 10% of the book, and a
+single failure of the DHFL or Jet Airways kind — both present in this archive
+and both real — removes roughly a tenth of capital in a session. That is a
+genuine property of running a decile portfolio on ₹3L, not an artefact, and it
+must appear in the reported drawdown rather than be smoothed by widening the
+book after the fact.
+
+## Trial accounting
+
+This is **one** configuration and will be logged as **one** trial. No breadth
+sweep will be run. If a later amendment tests a different N, it is a new trial
+and enters the Deflated Sharpe denominator, whatever the first result was.
+
+## Window discipline — binding
+
+Development runs **2015-01-01 to 2021-12-31**. The holdout declared in this
+file, **2022-01-01 to 2025-12-31**, is not touched until the specification is
+final and the development result is recorded. It is touched **once**.
+
+The archive extends to 2026-08-05. That tail is **outside** the declared
+holdout and is not a second holdout; it is not to be used to rescue a failed
+result.
+
+## What would make this amendment dishonest
+
+Changing N, the weighting, the cadence or the window **after** seeing a
+development result, and reporting the second number as though it were the
+first. If any of those changes, the original result stays in the trial
+register with its outcome, and the new one is logged beneath it.
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -836,6 +997,7 @@ Sharpe Ratio.
 | # | Date | Hypothesis | Configuration | Data snapshot | Commit | Outcome |
 |---|---|---|---|---|---|---|
 | **1** | 2026-08-06 | **H4** | A2 regime rule as declared: Nifty 100 < 200d SMA AND India VIX > trailing 756d 80th pct; monthly evaluation; 1-period lag; 0.55% round trip; 20% STCG; cash at 0% | NSE Indices + NSE: Nifty 100 PR 2003-2026, Momentum 30 TRI 2005-2026, India VIX 2010-2026, Momentum30+G-Sec 75:25 2011-2026 | `5fed927` | **REJECTED** (see below) |
+| **2** | 2026-08-23 | **H2** | A9 as declared: 10 holdings, top decile of 12-1 momentum in the point-in-time Nifty 100, equal weight, monthly, decided on previous close and filled at next open, ₹3,00,000, 1 sell order per exit | Bhavcopy 2015-2026 back-adjusted; NSE corporate actions; reconstructed point-in-time Nifty 100; Nifty 100 TRI | *pending* | **REJECTED** (see below) |
 
 ---
 
@@ -899,6 +1061,91 @@ gone.**
 
 ---
 
+### Trial #2 detail — H2 net benchmark outperformance
+
+**Run:** 2026-08-23 · **Window:** 2016-02-09 to 2021-12-31 (5.89 years, 71
+rebalances, 70 monthly observations). The window starts thirteen months after
+the archive does because 12-1 momentum needs 273 sessions before the first
+decision. **The 2022-2025 holdout was not touched.**
+
+| | Strategy | Nifty 100 TRI |
+|---|---:|---:|
+| Gross CAGR, before any cost | **14.04%** | 17.36% |
+| After charges | 12.13% | — |
+| After charges and tax | **10.85%** | 17.13% *(after 0.20% expense ratio)* |
+| Maximum drawdown | 47.79% | 37.94% |
+| Volatility | 23.23% | 17.52% |
+| Final value on ₹3,00,000 | ₹5,50,426 | ₹7,61,607 |
+
+**Criteria as declared. H2 is rejected if any fails.**
+
+| Criterion | Observed | Required | Outcome |
+|---|---|---|---|
+| Net return exceeds Nifty 100 TRI | 10.85% vs 17.13% | strategy > benchmark | **FAIL** |
+| Newey-West \|t\| on net excess | 0.98 (naive 0.92, lag 3) | ≥ 3.0 | **FAIL** |
+| Max drawdown vs benchmark | 47.79% vs 37.94% = 1.26× | ≤ 1.3× | PASS |
+| DSR p-value, PBO, 1.5× cost stress, 40% single-year concentration | — | — | **moot** |
+
+The last four are not scored because they cannot rescue a rejection: each asks
+whether a positive excess return is real, and this excess return is negative.
+
+**The mechanism, and it is not the one this project expected.**
+
+```
+Strategy gross vs raw TRI      -3.32%   <-- before a single rupee of cost
+  charges                      -1.92%
+  capital gains tax            -1.28%
+                               ------
+Net excess                     -6.28%
+```
+
+**The signal lost before it paid anything.** Every prior amendment in this file
+treats Indian transaction costs as the thing that would decide H2 — A1, A6, A7
+and A8 are all about costs, and the cost model was validated to the paisa
+against real contract notes precisely so this moment would be trustworthy. The
+costs turned out to be real, correctly modelled, and **not the cause**. They
+took a 3.32% annual deficit and made it 6.28%.
+
+Cash drag was measured and ruled out: the book held a mean of **1.96%** cash,
+so the shortfall is not an artefact of ₹30,000 positions failing to fill in
+high-priced names.
+
+**What this does and does not establish.**
+
+It rejects **this** specification — top decile, ten names, monthly, on the Nifty
+100 large-cap universe, over this window. It does not establish that momentum
+is absent in Indian equities. A t-statistic of 0.98 is not evidence of
+underperformance either; it says the difference is indistinguishable from noise
+over 70 observations, and 70 is not many.
+
+The most likely explanations, none of them tested and each of which would be a
+new amendment and a new trial:
+
+1. **The universe is too large-cap.** Published Indian momentum results
+   concentrate in mid-caps; the Nifty 100 is the top hundred by size, where the
+   effect is weakest and most arbitraged. NSE's own momentum index draws from
+   the Nifty 200.
+2. **The window is unkind.** 2018-2020 was a poor stretch for momentum globally,
+   and it is a third of this sample.
+3. **Ten names is too few to express a cross-sectional effect.** The strategy's
+   23.23% volatility against the index's 17.52% is the cost of concentration,
+   and A9 chose ten for continuity with H1 and for cost, not for signal
+   fidelity.
+
+**Consequence under Amendment A1.** A1 named H3, H4 and H6 as the only plausible
+sources of edge over a 0.22% momentum ETF. H4 is rejected. H2's base case is now
+**negative before costs**, which means H3 and H6 are no longer improvements on a
+working strategy — they would have to create the edge, not refine it.
+
+**Consequence for H1.** H1 predicts monotonic deciles with decile 10 beating
+decile 1. It is not refuted by this, because H1 is a statement about
+cross-sectional rank and this is a statement about one portfolio against an
+index. But decile 10 underperforming the index gross for 5.89 years is not what
+a strong momentum effect looks like, and H1 should now be tested expecting a
+weak result rather than a confirmation.
+
+---
+
 ## The cost floor, measured
 
 Established 2026-08-18 from the validated cost model, reading **no returns**
@@ -955,9 +1202,20 @@ separates them.
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
 | 2026-08-10 | all (deployment) | **Amendment A6** — fixed a ₹3,00,000 capital cap, a two-year abandonment test against Baseline B3, and six binding pre-conditions on any future derivatives work including a permanent ban on naked short options | Nothing in this file yet governed what happens *after* a result arrives, which is where retail capital is actually lost. The owner intends to explore F&O eventually; the conditions are cheapest to set honestly while still theoretical | Yes — no strategy result exists, no capital deployed, no derivatives work begun |
 | 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
+| 2026-08-23 | H2 (portfolio specification) | **Amendment A9** — declared H2's unstated parameters: **10 holdings** (the top decile), equal weight, monthly on the first session, decided on the previous close and filled at the next open, 252-session minimum history, development window 2015–2021 with the 2022–2025 holdout untouched. Logged as **one** trial; no breadth sweep | H2 said "the highest-ranked momentum names" without saying how many, which changes the answer. Ten because H1's criteria are written about decile 10 — holding twenty would test a different portfolio and could not say whether H1's effect is tradeable — and because it is the cheapest breadth A7 permits (0.458%–0.616% per full turnover across every execution assumption). Both reasons read no returns | Yes — momentum signal not yet implemented, no stock-level backtest run |
+| 2026-08-23 | H2 (cost model) | **Amendment A8** — corrected the DP charging unit from "per sell scrip" to **per sell order**, verified against two Groww contract notes and reconciled to the paisa against the funds ledger. Set a standing rule that any cost parameter not checked against a real settled transaction is marked documented-only | The registered text stated Zerodha's rule, not the one this account is charged under. A security sold in two orders on one day is charged twice. The correction is weakly **stricter** for every possible execution and strictly stricter whenever an exit splits, so it can only make H2 harder to pass — which is the only direction a pre-registered document may be corrected in without the edit being indistinguishable from fitting the rules to a result | Yes — no hypothesis tested on stock-level data; the correction raises modelled costs |
 | 2026-08-18 | all (portfolio construction) | **Amendment A7** — set a **portfolio breadth budget**: no configuration may be tested whose modelled cost of one full turnover exceeds **1.00% of capital**, which at ₹3,00,000 rules out 100 equal-weight holdings (1.402%) and 50 (0.852% at one order per exit, 1.638% at three). Every result must report the holdings count and the assumed sell orders per exit | Two independent methods agree the ₹3L/100-name configuration is uneconomic before any signal is considered: this project's own engine measured DP at 48.5% of all charges over 11 years, and a broker-tariff analysis reached the same conclusion from first principles. The cost model has since been validated to the paisa against real contract notes. Setting the budget from cost arithmetic — which reads no returns — costs no trial budget and removes the temptation to keep a wide book because one backtest liked it | Yes — no hypothesis tested on the real universe; breadth chosen on cost, not performance |
 
 ---
 
-*No backtest has been run. No market data has been ingested. No result in this
-file is an observation; every entry is a prediction made in advance.*
+*Every hypothesis in this file was registered before the data to test it
+existed. **Two** trials have since been run and are recorded in the trial
+register — **#1, H4, rejected** and **#2, H2, rejected** — and the price archive
+runs 2015-2026. No result has been observed for **H1, H3, H5 or H6**. The
+declared holdout, 2022-01-01 to 2025-12-31, remains **untouched**.*
+
+*This closing note previously read "No backtest has been run. No market data
+has been ingested." Both statements were true when written and had quietly
+stopped being true. A pre-registration whose own status line is stale is
+worthless as a record, so the status is now stated specifically enough to go
+out of date visibly rather than silently.*

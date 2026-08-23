@@ -391,3 +391,40 @@ def test_the_bonus_ratio_is_read_from_the_bonus_clause_only() -> None:
     )
     assert parsed.ratio_from is not None and parsed.ratio_to is not None
     assert parsed.ratio_from / parsed.ratio_to == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [
+        ("Fv Splt Frm Rs 10 To Rs 2", 0.2),
+        ("Fv Splt Frm Rs 10 To Re 1", 0.1),
+        ("Fv Splt Frm Rs 2 To Re 1", 0.5),
+        ("Fv Splt Frm Rs 10 To Rs 5", 0.5),
+        ("Fv Splt Frm Rs 5 To Re 1", 0.2),
+    ],
+)
+def test_the_abbreviated_split_subject_is_read(subject: str, expected: float) -> None:
+    """One quarter of NSE filings used a form with no recognised words at all.
+
+    From October 2016 to February 2017 splits arrived as ``Fv Splt Frm Rs 10 To
+    Rs 2``: not "face value split", not "sub-division", and "Frm" rather than
+    "From", so both the keyword test and the ratio pattern missed it. Fourteen
+    real splits carried no multiplier.
+
+    JSWSTEEL was recovered by the hand audit and recorded in the verdict
+    register. SOLARINDS, KARURVYSYA, KPRMILL and CAPLIPOINT were not, because
+    they traded below the audit's liquidity floor -- so the audit could not have
+    been the thing that caught this. The output check did: SOLARINDS surfaced as
+    an unexplained ``x0.2001`` in a real H2 run.
+    """
+    parsed = parse_subject(subject)
+    assert parsed.action_type is ActionType.SPLIT
+    assert parsed.ratio_from is not None and parsed.ratio_to is not None
+    assert parsed.ratio_from / parsed.ratio_to == pytest.approx(expected)
+
+
+def test_the_abbreviation_does_not_make_the_pattern_fire_on_prose() -> None:
+    """Accepting "Frm" must not loosen the match on unrelated subjects."""
+    assert parse_subject("Scheme Of Arrangement").ratio_from is None
+    assert parse_subject("Annual General Meeting").ratio_from is None
+    assert parse_subject("Dividend - Rs 5 Per Share").ratio_from is None

@@ -116,8 +116,15 @@ _MONTHS: Final = frozenset(
 # value -- 29 real splits in the 2015-2026 archive, including NESTLEIND,
 # TATASTEEL, DRREDDY, KOTAKBANK and EICHERMOT. Each looked like an unexplained
 # price collapse rather than a documented corporate action.
+#
+# **"Frm", not just "From".** For one quarter -- October 2016 to February 2017 --
+# NSE filed splits in an abbreviated form: ``Fv Splt Frm Rs 10 To Rs 2``. No
+# recognised keyword, no recognised preposition, so both the word test and the
+# ratio pattern missed it and fourteen real splits carried no multiplier.
+# JSWSTEEL was caught by the hand audit; SOLARINDS, KARURVYSYA, KPRMILL and
+# CAPLIPOINT were not, because they traded below the audit's liquidity floor.
 _FACE_SPLIT_RE: Final = re.compile(
-    r"from\s*(?:rs\.?|re\.?|inr)?\s*(\d+(?:\.\d+)?)\s*/?-?\s*(?:per\s+share)?\s*"
+    r"fr(?:o)?m\s*(?:rs\.?|re\.?|inr)?\s*(\d+(?:\.\d+)?)\s*/?-?\s*(?:per\s+share)?\s*"
     r"to\s*(?:rs\.?|re\.?|inr)?\s*(\d+(?:\.\d+)?)",
     re.IGNORECASE,
 )
@@ -129,7 +136,15 @@ _AMOUNT_RE: Final = re.compile(
 
 # Order matters: "Bonus" appears inside subjects that are primarily something
 # else, and a demerger subject can mention a ratio that is not a price ratio.
-_SPLIT_WORDS: Final = ("face value split", "sub-division", "subdivision", "stock split")
+_SPLIT_WORDS: Final = (
+    "face value split",
+    "sub-division",
+    "subdivision",
+    "stock split",
+    # The abbreviated form NSE used from October 2016 to February 2017.
+    "fv splt",
+    "fv split",
+)
 _CONSOLIDATION_WORDS: Final = ("consolidation", "face value consolidation", "reverse split")
 _DEMERGER_WORDS: Final = ("demerger", "scheme of arrangement", "spin off", "spin-off")
 _RIGHTS_WORDS: Final = ("rights",)

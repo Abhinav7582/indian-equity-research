@@ -22,12 +22,12 @@ governing document for anything evidential — this file may not weaken it.
 | 3e | Self-deception suite, mutation-tested | **Done** |
 | 3f | Statistical gates (DSR, PBO) | **Done** |
 | 3g | Purged / embargoed walk-forward CV | **Done** |
-| 4 | Hypothesis testing on the real universe | **In progress — H2.** Universe, adjusted bars, costs, gates and walk-forward all exist and are wired. Remaining: the 12-1 momentum signal, the H2 runner, and a written pre-declaration of the specification (N holdings, weighting, timing) **before** anything is run. Development window 2015–2021; the 2022–2025 holdout is touched exactly once, at the end |
+| 4 | Hypothesis testing on the real universe | **H2 REJECTED** (trial #2, 2026-08-23). Top decile of 12-1 momentum, 10 names, monthly, on the point-in-time Nifty 100: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI over 2016-02 to 2021-12. The signal lost **3.32% annualised before any cost**; charges (1.92%) and tax (1.28%) took it to −6.28%. **Costs were not the cause.** Holdout untouched. H1, H3, H5, H6 still untested |
 | 5 | Allocation system | Not started |
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**826 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**861 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 

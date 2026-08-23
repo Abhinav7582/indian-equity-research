@@ -48,10 +48,13 @@ from typing import Final
 
 __all__ = [
     "GateError",
+    "MeanTest",
     "OverfittingResult",
     "SharpeAssessment",
     "deflated_sharpe_ratio",
     "expected_maximum_sharpe",
+    "newey_west_lag",
+    "newey_west_mean_test",
     "probability_of_backtest_overfitting",
     "sharpe_ratio",
 ]
@@ -330,3 +333,140 @@ def _safe_sharpe(returns: list[float]) -> float:
     if var <= 0:
         return 0.0
     return mean / math.sqrt(var)
+
+
+# ---------------------------------------------------------------------------
+# Newey-West: the standard error a t-statistic needs when returns are not
+# independent
+# ---------------------------------------------------------------------------
+#
+# H1 and H2 both reject on "Newey-West-adjusted |t| < 3.0", and the adjustment
+# is not a formality. The ordinary standard error of a mean assumes the
+# observations are independent. Monthly strategy returns are not: a momentum
+# book holds many of the same names from one month to the next, so consecutive
+# returns share exposure and are positively autocorrelated.
+#
+# Positive autocorrelation makes the ordinary standard error too small, and a
+# t-statistic too large -- in the direction that manufactures significance. The
+# HAC estimator (Newey & West 1987) widens the error bar by however much the
+# series actually repeats itself, using a Bartlett kernel whose weights taper
+# to zero and which is guaranteed positive semi-definite, so the variance it
+# reports cannot come out negative.
+#
+# Requiring |t| >= 3.0 rather than the conventional 1.96 is deliberate and was
+# fixed at registration. Harvey, Liu & Zhu (2016) argue that the multiple
+# testing across the published asset-pricing literature means a t of 2 is no
+# longer evidence of anything; 3.0 is their suggested floor for a *new* claim.
+
+
+def newey_west_lag(observations: int) -> int:
+    """Bartlett bandwidth from Newey & West (1994), ``floor(4 (T/100)^(2/9))``.
+
+    Chosen by a published rule rather than by hand. Selecting the lag that made
+    a t-statistic look best would be a trial per lag tried, and an undisclosed
+    one.
+
+    Args:
+        observations: Length of the series.
+
+    Returns:
+        The lag truncation, at least 1 for any non-empty series.
+    """
+    if observations < 2:
+        return 0
+    return max(1, int(4.0 * (observations / 100.0) ** (2.0 / 9.0)))
+
+
+@dataclass(frozen=True, slots=True)
+class MeanTest:
+    """Whether a mean differs from zero, with autocorrelation accounted for."""
+
+    mean: float
+    standard_error: float
+    t_statistic: float
+    observations: int
+    lag: int
+    naive_t_statistic: float
+
+    @property
+    def inflation(self) -> float:
+        """How much the naive t overstates the corrected one.
+
+        Above 1.0 means ignoring autocorrelation would have flattered the
+        result. It is reported because it is the quantity the correction exists
+        to remove, and a reader should see its size rather than trust that it
+        was small.
+        """
+        if self.t_statistic == 0:
+            return 0.0
+        return abs(self.naive_t_statistic) / abs(self.t_statistic)
+
+    def describe(self) -> str:
+        """One line for a result table."""
+        return (
+            f"mean {self.mean:+.5f}, HAC t {self.t_statistic:+.2f} "
+            f"(naive {self.naive_t_statistic:+.2f}, x{self.inflation:.2f}), "
+            f"n={self.observations}, lag={self.lag}"
+        )
+
+
+def newey_west_mean_test(series: list[float], *, lag: int | None = None) -> MeanTest:
+    """Test whether the mean of ``series`` differs from zero, HAC-corrected.
+
+    Args:
+        series: Observations, in time order. Order matters -- shuffling it
+            destroys exactly the autocorrelation this measures.
+        lag: Bartlett truncation. Defaults to :func:`newey_west_lag`.
+
+    Returns:
+        The mean, its HAC standard error, and both t-statistics.
+
+    Raises:
+        GateError: if fewer than three observations are supplied, or the series
+            has no variance at all.
+    """
+    count = len(series)
+    if count < 3:
+        raise GateError(
+            f"a mean test needs at least 3 observations, got {count}. Fewer than "
+            f"that has no meaningful standard error, and reporting one would "
+            f"dress a coincidence as a measurement."
+        )
+    chosen = newey_west_lag(count) if lag is None else lag
+    if chosen < 0 or chosen >= count:
+        raise GateError(f"lag must be in [0, {count}), got {chosen}")
+
+    mean = sum(series) / count
+    residuals = [value - mean for value in series]
+    gamma_zero = sum(r * r for r in residuals) / count
+    # Not `gamma_zero <= 0`, for the reason `sharpe_ratio` records above: the
+    # mean of identical floats is not exactly any of them, so the residuals come
+    # out around 1e-16 and their squares around 1e-32 -- arithmetically positive,
+    # financially nothing, and enough to produce a t-statistic in the millions
+    # from a series that never moved.
+    if math.sqrt(gamma_zero) <= 1e-12 * max(1.0, abs(mean)):
+        raise GateError(
+            "every observation equals the mean, so the series has no variance and "
+            "no standard error exists. A constant is not evidence."
+        )
+
+    variance = gamma_zero
+    for j in range(1, chosen + 1):
+        gamma_j = sum(residuals[t] * residuals[t - j] for t in range(j, count)) / count
+        weight = 1.0 - j / (chosen + 1.0)
+        variance += 2.0 * weight * gamma_j
+    # The Bartlett kernel is positive semi-definite, so this cannot go negative;
+    # the guard is against floating-point dust at the boundary, not against the
+    # mathematics.
+    variance = max(variance, 0.0)
+
+    standard_error = math.sqrt(variance / count)
+    naive_error = math.sqrt(gamma_zero * count / (count - 1) / count)
+    return MeanTest(
+        mean=mean,
+        standard_error=standard_error,
+        t_statistic=mean / standard_error if standard_error > 0 else 0.0,
+        observations=count,
+        lag=chosen,
+        naive_t_statistic=mean / naive_error if naive_error > 0 else 0.0,
+    )
