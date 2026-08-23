@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Reconstruct point-in-time Nifty 100 membership and report how clean it is.
+"""Reconstruct a point-in-time index universe and report how clean it is.
 
 Usage
 -----
     uv run python scripts/build_membership.py
+    uv run python scripts/build_membership.py --index "Nifty 200"
     uv run python scripts/build_membership.py --write data/reference/nifty100_membership.csv
 
 Reads every press release in ``data/raw/circulars``, the hand-read register, and
@@ -28,90 +29,30 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
 import sys
-import zipfile
 from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from indian_equity_research.backtest.prices import CASH_EQUITY_SERIES
-from indian_equity_research.market.identity import canonical_symbols, group_members
-from indian_equity_research.market.index_changes import (
-    IndexChange,
-    IndexChangeError,
-    drop_deferred,
-    load_manual_register,
-    parse_release,
-    read_release_pdf,
+from indian_equity_research.market.identity import group_members
+from indian_equity_research.market.reconstruction import (
+    NIFTY_100,
+    NIFTY_200,
+    IndexSpec,
+    Reconstruction,
+    ReconstructionError,
+    reconstruct,
 )
-from indian_equity_research.market.membership import MembershipHistory, roll_back
 
-CIRCULARS = Path("data/raw/circulars")
-BHAVCOPY = Path("data/raw/bhavcopy")
-ROSTERS = Path("data/raw/archive/nse_nifty100_constituents")
-INDEX_NAME = "Nifty 100"
 ARCHIVE_START = date(2015, 1, 1)
+KNOWN: dict[str, IndexSpec] = {spec.name: spec for spec in (NIFTY_100, NIFTY_200)}
 
 
-def isins_by_symbol() -> dict[str, set[str]]:
-    """Every cash-equity ticker in the archive and the ISINs it traded under.
-
-    Reads the whole bhavcopy archive, which takes a couple of minutes. It is
-    the only source that links a ticker to a security across a rename, because
-    it is the only one recording both on the same row on the same day.
-
-    **Cash equity only.** The debt series reuse short codes across bond issues,
-    so including them chains unrelated issuers through the ISIN graph. Left
-    unfiltered this merged IBULHSGFIN, CHOLAFIN and some two hundred bond lines
-    into a single "security", silently.
-    """
-    out: dict[str, set[str]] = {}
-    files = sorted(BHAVCOPY.glob("*.zip"))
-    for index, path in enumerate(files, start=1):
-        with zipfile.ZipFile(path) as archive:
-            text = archive.read(archive.namelist()[0]).decode("utf-8", "replace")
-        reader = csv.DictReader(io.StringIO(text))
-        legacy = "PREVCLOSE" in {c.strip().upper() for c in (reader.fieldnames or [])}
-        symbol_key = "SYMBOL" if legacy else "TCKRSYMB"
-        series_key = "SERIES" if legacy else "SCTYSRS"
-        for row in reader:
-            upper = {k.strip().upper(): (v.strip() if v else "") for k, v in row.items() if k}
-            if upper.get(series_key, "").upper() not in CASH_EQUITY_SERIES:
-                continue
-            symbol = upper.get(symbol_key, "")
-            isin = upper.get("ISIN", "").upper()
-            if symbol and isin:
-                out.setdefault(symbol, set()).add(isin)
-        if index % 500 == 0:
-            print(f"  indexed {index}/{len(files)} sessions", file=sys.stderr)
-    return out
-
-
-def parsed_changes() -> tuple[list[IndexChange], int, int]:
-    """Every Nifty 100 change from the releases plus the hand-read register."""
-    changes: list[IndexChange] = []
-    unreadable = 0
-    for path in sorted(CIRCULARS.glob("*.pdf")):
-        try:
-            text = read_release_pdf(path)
-        except Exception:  # noqa: BLE001 - a scan with no text layer, handled by hand
-            unreadable += 1
-            continue
-        try:
-            changes.append(parse_release(text, INDEX_NAME, source=path.name))
-        except IndexChangeError:
-            continue
-    kept = [c for c in drop_deferred(changes) if c.included or c.excluded]
-    register = load_manual_register()
-    hand = [c for c in register.changes if c.included or c.excluded]
-    return kept + hand, len(hand), unreadable
-
-
-def report(history: MembershipHistory, canonical: dict[str, str]) -> None:
+def report(built: Reconstruction) -> None:
     """Print the reconstruction and everything wrong with it."""
-    print(f"\n{history.describe()}\n")
+    history = built.history
+    print(f"\n{built.describe()}\n")
 
     if history.unapplied:
         print("CHANGES THAT COULD NOT BE APPLIED")
@@ -121,17 +62,17 @@ def report(history: MembershipHistory, canonical: dict[str, str]) -> None:
         print()
 
     if history.size_deviations:
-        groups = group_members(canonical)
+        groups = group_members(built.canonical)
         print(f"PERIODS NOT AT {history.declared_size} MEMBERS")
         for deviation in history.size_deviations:
             print(f"    {deviation.effective_from}  {deviation.size} members")
 
         # Which securities account for the excess? Intersect every oversized
         # snapshot and subtract the union of every correctly sized one. A
-        # security that is in all of the former and none of the latter is
-        # present exactly when the count is wrong -- which is the only kind of
-        # answer worth printing. Differencing against one arbitrary snapshot
-        # instead returns every name that ever changed, which is noise.
+        # security in all of the former and none of the latter is present
+        # exactly when the count is wrong -- the only answer worth printing.
+        # Differencing against one arbitrary snapshot returns every name that
+        # ever changed, which is noise.
         oversized = [s for s in history.snapshots if s.size > history.declared_size]
         correct = [s for s in history.snapshots if s.size == history.declared_size]
         if oversized and correct:
@@ -156,53 +97,35 @@ def report(history: MembershipHistory, canonical: dict[str, str]) -> None:
 def main() -> int:
     """Build the reconstruction, report it, optionally write it."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--index", default=NIFTY_100.name, choices=sorted(KNOWN))
     parser.add_argument("--write", type=Path, default=None, help="write the table to this path")
     parser.add_argument("--stop-at", default=ARCHIVE_START.isoformat())
     args = parser.parse_args()
 
-    rosters = sorted(ROSTERS.glob("*.csv"))
-    if not rosters:
-        print(f"no archived constituent list in {ROSTERS}")
+    spec = KNOWN[args.index]
+    print(f"reconstructing {spec.describe()}...")
+    print("  (indexing the bhavcopy archive for symbol identity, this takes a minute)")
+    try:
+        built = reconstruct(spec, stop_at=date.fromisoformat(args.stop_at))
+    except ReconstructionError as exc:
+        # Expected and actionable -- usually a dataset not yet downloaded. A
+        # traceback would bury the line that says what to do about it.
+        print(f"\n  CANNOT BUILD THE UNIVERSE\n    {exc}")
         return 1
-    roster_path = rosters[-1]
-    roster_date = date.fromisoformat(roster_path.stem.split("_")[-1])
-    with roster_path.open(encoding="utf-8") as handle:
-        roster = [row["Symbol"].strip().upper() for row in csv.DictReader(handle)]
-    print(f"roster {roster_path.name}: {len(roster)} symbols as at {roster_date}")
-
-    changes, hand_read, unreadable = parsed_changes()
-    print(
-        f"{len(changes)} changes ({len(changes) - hand_read} parsed from releases, "
-        f"{hand_read} hand-read); {unreadable} releases have no text layer"
-    )
-    future = [c for c in changes if c.effective_from > roster_date]
-    for change in future:
-        print(f"  announced but not yet effective, not undone: {change.describe()}")
-
-    print("indexing the bhavcopy archive for symbol identity...")
-    canonical = canonical_symbols(isins_by_symbol())
-
-    history = roll_back(
-        roster,
-        roster_date,
-        changes,
-        canonical=canonical,
-        stop_at=date.fromisoformat(args.stop_at),
-    )
-    report(history, canonical)
+    report(built)
 
     if args.write:
         args.write.parent.mkdir(parents=True, exist_ok=True)
         with args.write.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(["effective_from", "size", "members"])
-            for snapshot in history.snapshots:
+            for snapshot in built.history.snapshots:
                 writer.writerow(
                     [snapshot.effective_from, snapshot.size, " ".join(sorted(snapshot.members))]
                 )
         print(f"\nwritten to {args.write}")
 
-    return 0 if history.clean else 2
+    return 0 if built.history.clean else 2
 
 
 if __name__ == "__main__":

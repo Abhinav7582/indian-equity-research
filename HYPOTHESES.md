@@ -994,6 +994,141 @@ register with its outcome, and the new one is logged beneath it.
 
 ---
 
+# AMENDMENT A10 — the Nifty 200 extension, declared before the data exists
+
+**Date: 2026-08-23** · **Written before the Nifty 200 roster and TRI have been
+downloaded, and therefore before any Nifty 200 result could have been seen.**
+
+## Why this exists
+
+H1 and H2 were both rejected on the **Nifty 100** — the largest, most-covered,
+most-arbitraged hundred names on the exchange. Neither result says anything
+about the rest of the market, and there is a specific published reason to look
+wider: Indian momentum research concentrates in mid-caps, and NSE's own momentum
+index draws its constituents from the **Nifty 200**, not the Nifty 100.
+
+This amendment fixes the extension **before** it is run, because the tempting
+version of it — take the Nifty 100 output, notice which deciles worked, and
+build the Nifty 200 test around them — is selection, and would make whatever
+came out worth very little.
+
+## One variable moves
+
+| | Nifty 100 (trials #2, #3) | Nifty 200 (trials #4, #5) |
+|---|---|---|
+| Universe | Nifty 100, point-in-time | **Nifty 200, point-in-time** |
+| Signal | 12-1 momentum | unchanged |
+| Deciles | 10 | unchanged |
+| Cadence | monthly, first session | unchanged |
+| Decision / execution | previous close / next open | unchanged |
+| Minimum history | 252 sessions | unchanged |
+| Development window | 2015–2021 | unchanged |
+| Holdout | 2022–2025, untouched | unchanged |
+| Costs | H1 gross, H2 full | unchanged |
+| Capital | ₹3,00,000 | unchanged |
+
+**Breadth changes as a consequence, and this is declared rather than hidden.**
+The top decile of two hundred names is **twenty** names, not ten. A9's principle
+was "H2 trades what H1 tests", and holding that principle constant is what
+forces the count to move. The alternative — holding ten names, the top 5% —
+would keep breadth constant while changing the rank cut, and would break the
+link to H1 that A9 exists to preserve.
+
+Twenty holdings at ₹3,00,000 is ₹15,000 a position and costs **0.616% per full
+turnover at one sell order per exit, 0.694% at the measured 1.5, and 0.930% at
+three**. All three clear Amendment A7's 1.00% budget, so the change is
+permitted. It also reduces the concentration A9 flagged as the cost of ten
+names.
+
+## The prediction, registered now so that confirming it means something
+
+The Nifty 100 run produced this decile profile:
+
+```
+D8  +0.376%     D9  +0.403%     D10  -0.138%    per month, gross
+```
+
+That pattern was **not predicted**. It emerged from the data, which is exactly
+why it cannot be acted on from the same data.
+
+**So it is predicted here, in advance, for a universe not yet examined:**
+
+> If the Nifty 100 pattern reflects something real about the top of the momentum
+> distribution rather than sampling noise, the Nifty 200 will also show **D8 and
+> D9 exceeding D10**.
+
+This costs nothing — it falls out of the same run. But stating it beforehand
+turns a coincidence into evidence if it holds, and into a useful negative if it
+does not. A pattern that appears in one universe and not another was noise.
+
+**H2 on the Nifty 200 still trades the top decile**, as A9 fixed, and **not** D9.
+Moving the universe and the rank cut together would leave any result
+unattributable to either.
+
+If the prediction holds, a *later* amendment may propose trading D9, and it will
+then rest on two independent observations rather than one. That amendment does
+not exist yet and must not be written until the result is in.
+
+## Trial accounting — binding
+
+Two trials, logged as **#4 (H1, Nifty 200)** and **#5 (H2, Nifty 200)**, whatever
+they show and including any that is abandoned mid-run.
+
+That brings the register to **five**. This file already records what that costs:
+*with 5 trials the chance-expected best Sharpe is 1.19.* Any result from here
+must clear a visibly higher bar than trial #2 or #3 faced, and the Deflated
+Sharpe denominator is the honest count, not the count of results reported.
+
+## Data required, and not yet held
+
+Neither of these is in the repository, and the run is blocked until both are:
+
+1. **A Nifty 200 constituent roster.** The reconstruction rolls today's roster
+   backwards; without a starting point there is nothing to roll.
+   `https://nsearchives.nseindia.com/content/indices/ind_nifty200list.csv`
+   → `data/raw/archive/nse_nifty200_constituents/nse_nifty200_constituents_YYYY-MM-DD.csv`
+2. **The Nifty 200 Total Return Index**, 2015–2026, from
+   `niftyindices.com/reports/historical-data`, Total Returns Index Values,
+   Broad Market Indices → NIFTY 200
+   → `data/raw/indices/nifty200_tri/nifty200_tri_YYYY.csv`
+
+The archive holds `nifty200_momentum30` and a 75:25 blend, but **not** a plain
+Nifty 200 TRI. Benchmarking against the momentum index instead would be
+comparing a momentum strategy to a momentum strategy, and would answer a
+different question.
+
+## What is already known about the reconstruction
+
+The press releases parse. Forty-eight substantive Nifty 200 changes were
+extracted from the existing archive, running 2013 to 2026, and **forty-four have
+a net size change of exactly zero** as a fixed-size index requires.
+
+Four do not, and must be resolved before any result is recorded:
+
+```
+2016-04-01  ind_prs22022016_2.pdf   net +2
+2020-06-26  ind_prs10062020.pdf     net -5
+2023-09-29  ind_prs17082023.pdf     net +1
+2024-08-30  ind_prs23082024_1.pdf   net -1
+```
+
+The last two are the **TATAMTRDVR** pair already understood from the Nifty 100
+reconstruction — Tata Motors' differential-voting share entering and leaving as
+a constituent in its own right. The first two are not yet explained.
+
+**The run is conditional on `roll_back` reporting zero unapplied changes**, the
+same standard the Nifty 100 had to meet. A reconstruction that does not close is
+not a universe, and no result from it enters this register.
+
+## What would make this amendment dishonest
+
+Changing the decile traded, the breadth, the window or the signal **after**
+seeing a Nifty 200 result and reporting the second number as though it were the
+first. If any of those changes, the original stays in the register with its
+outcome and the new one is logged beneath it.
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -1290,6 +1425,7 @@ separates them.
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
 | 2026-08-10 | all (deployment) | **Amendment A6** — fixed a ₹3,00,000 capital cap, a two-year abandonment test against Baseline B3, and six binding pre-conditions on any future derivatives work including a permanent ban on naked short options | Nothing in this file yet governed what happens *after* a result arrives, which is where retail capital is actually lost. The owner intends to explore F&O eventually; the conditions are cheapest to set honestly while still theoretical | Yes — no strategy result exists, no capital deployed, no derivatives work begun |
 | 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
+| 2026-08-23 | H1 and H2 (universe) | **Amendment A10** — declared the **Nifty 200** extension: one variable moves, the universe; signal, deciles, cadence, window, holdout and costs all unchanged. Breadth follows the decile (20 names, not 10) to keep A9's "H2 trades what H1 tests" principle intact, and clears A7 at 0.616–0.930%. Registered **in advance** the prediction that D8 and D9 will again exceed D10, so a replication counts as evidence and a non-replication says the Nifty 100 pattern was noise. H2 still trades D10, **not** D9. Two trials, #4 and #5 | H1 and H2 were rejected on the largest, most-arbitraged hundred names, which says nothing about the rest of the market; Indian momentum research concentrates in mid-caps and NSE's own momentum index draws from the Nifty 200. The tempting version — build the Nifty 200 test around whichever deciles worked on the Nifty 100 — is selection, so the design is fixed before the roster and TRI have even been downloaded | Yes — the two required datasets are not in the repository, so no Nifty 200 result could have been seen |
 | 2026-08-23 | H2 (portfolio specification) | **Amendment A9** — declared H2's unstated parameters: **10 holdings** (the top decile), equal weight, monthly on the first session, decided on the previous close and filled at the next open, 252-session minimum history, development window 2015–2021 with the 2022–2025 holdout untouched. Logged as **one** trial; no breadth sweep | H2 said "the highest-ranked momentum names" without saying how many, which changes the answer. Ten because H1's criteria are written about decile 10 — holding twenty would test a different portfolio and could not say whether H1's effect is tradeable — and because it is the cheapest breadth A7 permits (0.458%–0.616% per full turnover across every execution assumption). Both reasons read no returns | Yes — momentum signal not yet implemented, no stock-level backtest run |
 | 2026-08-23 | H2 (cost model) | **Amendment A8** — corrected the DP charging unit from "per sell scrip" to **per sell order**, verified against two Groww contract notes and reconciled to the paisa against the funds ledger. Set a standing rule that any cost parameter not checked against a real settled transaction is marked documented-only | The registered text stated Zerodha's rule, not the one this account is charged under. A security sold in two orders on one day is charged twice. The correction is weakly **stricter** for every possible execution and strictly stricter whenever an exit splits, so it can only make H2 harder to pass — which is the only direction a pre-registered document may be corrected in without the edit being indistinguishable from fitting the rules to a result | Yes — no hypothesis tested on stock-level data; the correction raises modelled costs |
 | 2026-08-18 | all (portfolio construction) | **Amendment A7** — set a **portfolio breadth budget**: no configuration may be tested whose modelled cost of one full turnover exceeds **1.00% of capital**, which at ₹3,00,000 rules out 100 equal-weight holdings (1.402%) and 50 (0.852% at one order per exit, 1.638% at three). Every result must report the holdings count and the assumed sell orders per exit | Two independent methods agree the ₹3L/100-name configuration is uneconomic before any signal is considered: this project's own engine measured DP at 48.5% of all charges over 11 years, and a broker-tariff analysis reached the same conclusion from first principles. The cost model has since been validated to the paisa against real contract notes. Setting the budget from cost arithmetic — which reads no returns — costs no trial budget and removes the temptation to keep a wide book because one backtest liked it | Yes — no hypothesis tested on the real universe; breadth chosen on cost, not performance |

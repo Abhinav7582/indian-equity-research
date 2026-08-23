@@ -6,9 +6,15 @@ Usage
     uv run python scripts/run_h2.py
     uv run python scripts/run_h2.py --sell-orders 1.5
     uv run python scripts/run_h2.py --end 2021-12-31
+    uv run python scripts/run_h2.py --index "Nifty 200" --holdings 20
 
-Runs the specification fixed by **Amendment A9**: 10 holdings, top decile of
-12-1 momentum in the point-in-time Nifty 100, equal weight, monthly.
+Runs the specification fixed by **Amendment A9**: the top decile of 12-1
+momentum in a point-in-time index universe, equal weight, monthly.
+
+Breadth follows the decile, as A9's "H2 trades what H1 tests" principle
+requires: **10 holdings on the Nifty 100, 20 on the Nifty 200** (Amendment A10).
+It is passed explicitly rather than derived, so a run whose breadth does not
+match its universe is visible in the command that produced it.
 
 This spends trial budget
 ------------------------
@@ -24,7 +30,6 @@ window overlapping 2022-2025 unless explicitly permitted.
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from datetime import date
 from pathlib import Path
@@ -32,15 +37,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from indian_equity_research.backtest.prices import build_bars
-from indian_equity_research.market.identity import canonical_symbols
-from indian_equity_research.market.membership import roll_back
+from indian_equity_research.market.reconstruction import (
+    NIFTY_100,
+    NIFTY_200,
+    ReconstructionError,
+    reconstruct,
+)
 from indian_equity_research.research.h2_experiment import H2Config, H2Result, load_tri, run_h2
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_membership import isins_by_symbol, parsed_changes
-
-ROSTERS = Path("data/raw/archive/nse_nifty100_constituents")
-TRI = Path("data/raw/indices/nifty100_tri")
+# Each index is benchmarked against **its own** total-return index. Comparing a
+# Nifty 200 strategy to the Nifty 100 TRI would fold a size effect into the
+# excess return and report it as skill.
+KNOWN = {
+    NIFTY_100.name: (NIFTY_100, Path("data/raw/indices/nifty100_tri")),
+    NIFTY_200.name: (NIFTY_200, Path("data/raw/indices/nifty200_tri")),
+}
 
 
 def score(result: H2Result) -> list[tuple[str, str, str, bool]]:
@@ -142,12 +153,14 @@ def report(result: H2Result) -> None:
 def main() -> int:
     """Build the inputs, run H2, print the verdict."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--index", default=NIFTY_100.name, choices=sorted(KNOWN))
     parser.add_argument("--start", default="2015-01-01")
     parser.add_argument("--end", default="2021-12-31")
     parser.add_argument("--holdings", type=int, default=10)
     parser.add_argument("--sell-orders", type=float, default=1.0)
     parser.add_argument("--capital", type=float, default=300_000.0)
     args = parser.parse_args()
+    spec, tri_dir = KNOWN[args.index]
 
     cfg = H2Config(
         holdings=args.holdings,
@@ -157,47 +170,39 @@ def main() -> int:
         sell_orders_per_exit=args.sell_orders,
     )
 
-    print("reconstructing point-in-time membership...")
-    roster_path = sorted(ROSTERS.glob("*.csv"))[-1]
-    roster_date = date.fromisoformat(roster_path.stem.split("_")[-1])
-    with roster_path.open(encoding="utf-8") as handle:
-        roster = [row["Symbol"].strip().upper() for row in csv.DictReader(handle)]
-    changes, _, _ = parsed_changes()
-    canonical = canonical_symbols(isins_by_symbol())
-    history = roll_back(roster, roster_date, changes, canonical=canonical, stop_at=cfg.start)
-    print(f"  {history.describe()}")
-    if history.unapplied:
+    print(f"reconstructing {spec.describe()}...")
+    try:
+        universe = reconstruct(spec, stop_at=cfg.start)
+    except ReconstructionError as exc:
+        # An expected, actionable failure -- usually a dataset that has not been
+        # downloaded yet. A traceback here would bury the one line that says
+        # what to do about it.
+        print(f"\n  CANNOT BUILD THE UNIVERSE\n    {exc}")
+        return 1
+    print(f"  {universe.describe()}")
+    if universe.history.unapplied:
         print("  REFUSING: membership could not be reconstructed cleanly.")
-        for problem in history.unapplied:
+        for problem in universe.history.unapplied:
             print(f"    {problem.describe()}")
         return 1
 
-    universe: set[str] = set()
-    for snapshot in history.snapshots:
-        universe |= snapshot.members
-    # Membership is keyed by canonical symbol; bars are keyed by the ticker that
-    # traded. Load every ticker belonging to a member security, or a renamed
-    # company vanishes from the universe on the day it changed name.
-    tickers = {sym for sym, rep in canonical.items() if rep in universe}
-    print(f"  {len(universe)} securities ever in the index, {len(tickers)} tickers")
-
     print("building back-adjusted bars...")
-    history_bars = build_bars(symbols=tickers, start=cfg.start, end=cfg.end)
+    history_bars = build_bars(symbols=universe.tickers, start=cfg.start, end=cfg.end)
     print(f"  {history_bars.describe()}")
 
     # Bars are keyed by traded ticker; the strategy asks by canonical symbol.
     merged: dict[str, dict[date, object]] = {}
     for ticker, series in history_bars.bars.items():
-        merged.setdefault(canonical.get(ticker, ticker), {}).update(series)
+        merged.setdefault(universe.canonical.get(ticker, ticker), {}).update(series)
 
-    print("loading the Nifty 100 TRI...")
-    tri = load_tri(TRI)
+    print(f"loading the {spec.name} TRI...")
+    tri = load_tri(tri_dir)
     print(f"  {len(tri)} index levels\n")
 
     result = run_h2(
         merged,  # type: ignore[arg-type]
         history_bars.sessions,
-        history,
+        universe.history,
         tri,
         config=cfg,
         residual_warnings=tuple(r.describe() for r in history_bars.residuals),
