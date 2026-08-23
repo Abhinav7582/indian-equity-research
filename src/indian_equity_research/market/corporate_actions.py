@@ -50,6 +50,10 @@ class ActionType(StrEnum):
 
     SPLIT = "SPLIT"
     BONUS = "BONUS"
+    #: A bonus and a face-value split declared together, on one ex-date, in one
+    #: feed subject. Its own member because the price takes **both** ratios and
+    #: reading only one is a silent halving or doubling of the adjustment.
+    BONUS_AND_SPLIT = "BONUS_AND_SPLIT"
     DIVIDEND = "DIVIDEND"
     RIGHTS = "RIGHTS"
     DEMERGER = "DEMERGER"

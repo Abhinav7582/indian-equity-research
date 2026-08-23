@@ -15,19 +15,19 @@ governing document for anything evidential — this file may not weaken it.
 | 1 | Research foundation, feasibility verdict, H1–H6 registered | **Done** |
 | 1.5 | H4 regime overlay experiment | **Done — H4 REJECTED** |
 | 2 | Data layer: archiver, calendar, instrument master, validator, bhavcopy ingest, delisting register, adjustment engine | **Done** |
-| 3a | Universe construction | **Done — real Nifty 100 reconstructed.** Membership continuous July 2015 → August 2026, net size change zero. A5 proxy retained as scaffolding only |
-| 3b | Adjusted price series pipeline | **Done.** Of 487 large moves in liquid names: 270 explained by a documented action, 138 listing days, 12 market-wide, 67 hand-adjudicated (6 real actions, 61 crashes). Four lookup bugs found and fixed along the way: `Re` vs `Rs`, symbol-vs-ISIN matching, the date-ranged endpoint omitting renamed/delisted names, and `&` breaking a URL. **Wired in** via backtest/prices.py: build_bars() serves back-adjusted OHLC and refuses while the audit is incomplete. A residual-move guard catches splits the audit could not reach (TIDEWATER, below the liquidity threshold and renamed to VEEDOL) |
+| 3a | Universe construction | **Done — real Nifty 100 reconstructed, and now actually produced.** `market/membership.py` rolls the 2026-08-21 roster backwards through 38 changes to 2014-09-19: **34 snapshots, 0 changes unapplied**. Renames are resolved by ISIN identity (`market/identity.py`), not by ticker — without that, five changes fail silently and the roster drifts. Size is 100 throughout except two windows at 101, both accounted for by exactly one security, `TATAMTRDVR`; NSE ran the Nifty 50 at 51 members for the same reason. A5 proxy retained as scaffolding only |
+| 3b | Adjusted price series pipeline | **Done.** Of 487 large moves in liquid names: 270 explained by a documented action, 138 listing days, 12 market-wide, 67 hand-adjudicated (6 real actions, 61 crashes). Four lookup bugs found and fixed along the way: `Re` vs `Rs`, symbol-vs-ISIN matching, the date-ranged endpoint omitting renamed/delisted names, and `&` breaking a URL. **Wired in** via backtest/prices.py: build_bars() serves back-adjusted OHLC and refuses while the audit is incomplete. `residual_moves()` then found three further defects the audit could not have seen, all silent — see `docs/price_series_defects.md`: the `EQ`-only filter deleting surveillance-series bars, feed actions keyed by the vendor's *current* symbol (61 of 841 ratios, 7.2%, lost), and compound `Bonus/Split` subjects read as one action (11 rows, TECHM and BAJFINANCE among them) |
 | 3c | Transaction cost model | **Done** |
 | 3d | Event-driven engine | **Done** |
 | 3e | Self-deception suite, mutation-tested | **Done** |
 | 3f | Statistical gates (DSR, PBO) | **Done** |
 | 3g | Purged / embargoed walk-forward CV | **Done** |
-| 4 | Hypothesis testing on the real universe | **Unblocked** — waiting on 3b only |
+| 4 | Hypothesis testing on the real universe | **In progress — H2.** Universe, adjusted bars, costs, gates and walk-forward all exist and are wired. Remaining: the 12-1 momentum signal, the H2 runner, and a written pre-declaration of the specification (N holdings, weighting, timing) **before** anything is run. Development window 2015–2021; the 2022–2025 holdout is touched exactly once, at the end |
 | 5 | Allocation system | Not started |
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**731 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**826 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 

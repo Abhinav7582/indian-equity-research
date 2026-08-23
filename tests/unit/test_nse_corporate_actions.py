@@ -322,3 +322,72 @@ def test_the_rupee_abbreviation_does_not_loosen_the_match() -> None:
     """Accepting "Re" must not make the pattern fire on unrelated prose."""
     assert parse_subject("Reduction of capital").ratio_from is None
     assert parse_subject("Redemption of preference shares").ratio_from is None
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    [
+        # BAJFINANCE 2016-09-08. Observed x0.1021; reading only the split gives
+        # x0.20 and leaves a fabricated 49% fall in a Nifty 50 constituent.
+        (
+            "Bonus 1:1/Face Value Split (Sub-Division) - From Rs 10/- Per Share "
+            "To Rs 2/- Per Share",
+            0.1,
+        ),
+        # TECHM 2015-03-19, with spaces around the separator.
+        ("Bonus 1:1 / Face Value Split - From Rs 10/- Per Share To Rs 5/- Per Share", 0.25),
+        # TIDEWATER 2016-03-16. A person reading the price move recorded x0.25
+        # by hand; the parser must now reach the same number from the document.
+        (
+            "Bonus 1:1/Face Value Split (Sub-Division) - From Rs 10/- Per Share "
+            "To Rs 5/- Per Share",
+            0.25,
+        ),
+        # AVANTIFEED 2018-06-26: a 1:2 bonus with a 2-to-1 split.
+        (
+            "Bonus 1:2/Face Value Split (Sub-Division) From Rs 2/- Per Share To Re 1/- Per Share",
+            1 / 3,
+        ),
+    ],
+)
+def test_a_bonus_and_a_split_on_one_line_take_both_ratios(subject: str, expected: float) -> None:
+    """Eleven feed rows declare a bonus and a split in a single subject.
+
+    The price takes both. Reading one halves or doubles the adjustment, and the
+    remainder is indistinguishable from a real move afterwards -- which is how
+    it survived until an output check caught the residual.
+    """
+    parsed = parse_subject(subject)
+    assert parsed.action_type is ActionType.BONUS_AND_SPLIT
+    assert parsed.ratio_from is not None and parsed.ratio_to is not None
+    assert parsed.ratio_from / parsed.ratio_to == pytest.approx(expected)
+
+
+def test_a_split_without_a_bonus_is_still_a_plain_split() -> None:
+    """The compound branch must not fire on a subject that only splits.
+
+    "Annual General Meeting/Face Value Split ..." is the same slash-joined
+    shape and carries no bonus.
+    """
+    subject = (
+        "Annual General Meeting/Face Value Split (Sub-Division) - "
+        "From Rs 10/- Per Share To Re 1/- Per Share"
+    )
+    parsed = parse_subject(subject)
+    assert parsed.action_type is ActionType.SPLIT
+    assert parsed.ratio_from is not None and parsed.ratio_to is not None
+    assert parsed.ratio_from / parsed.ratio_to == pytest.approx(0.1)
+
+
+def test_the_bonus_ratio_is_read_from_the_bonus_clause_only() -> None:
+    """A compound subject carries other numbers around slashes.
+
+    "From Rs 10/- Per Share" sits one loose character class away from looking
+    like a ratio, so the search is anchored on the word "bonus" rather than run
+    across the whole string.
+    """
+    parsed = parse_subject(
+        "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share/Bonus 1:1"
+    )
+    assert parsed.ratio_from is not None and parsed.ratio_to is not None
+    assert parsed.ratio_from / parsed.ratio_to == pytest.approx(0.1)

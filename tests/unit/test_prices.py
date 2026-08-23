@@ -12,7 +12,14 @@ import datetime as dt
 import pytest
 
 from indian_equity_research.backtest.engine import Bar
-from indian_equity_research.backtest.prices import adjust_bars, residual_moves
+from indian_equity_research.backtest.prices import (
+    CASH_EQUITY_SERIES,
+    FeedAdjustment,
+    SymbolSpan,
+    adjust_bars,
+    residual_moves,
+    route_adjustments,
+)
 from indian_equity_research.market.adjustment import Adjustment, AdjustmentSource
 
 START = dt.date(2020, 1, 1)
@@ -146,11 +153,16 @@ def test_an_adjustment_outside_the_window_still_scales_history() -> None:
 def test_an_unadjusted_split_is_reported_as_a_residual() -> None:
     """The check that found TIDEWATER.
 
-    The hand audit was scoped to names trading at least Rs 20 crore a day.
-    TIDEWATER split on 2021-10-18 on Rs 4.03 crore, so it was never examined,
-    and its corporate actions sit in the NSE feed under the post-rename symbol
-    VEEDOL. Two independent reasons the adjustment was missed, and this one
-    check catches both -- because it looks at the output, not the inputs.
+    Worth recording what it actually found, because the first reading of it was
+    wrong. The residual was ``2021-10-18 x0.1123`` and was taken for a missed
+    split in a thinly traded name. It was not: TIDEWATER traded every session,
+    but on the surveillance series ``BE`` from 2021-07-15, and the loader kept
+    only ``EQ``. Three months of bars were dropped, welding 2021-07-14 onto
+    2021-10-18 across a documented x0.2 action and a real 43 per cent fall.
+
+    No input check could have caught that -- the feed was complete and the
+    register was fully marked. Only the output was wrong. That is the argument
+    for this function.
     """
     raw = flat_then_split(10, 1000.0, ex_index=5, ratio=0.1)
     found = residual_moves({"TIDEWATER": raw})
@@ -183,3 +195,133 @@ def test_ordinary_volatility_is_not_flagged() -> None:
     """The threshold must not fire on a bad but normal day."""
     raw = flat_then_split(10, 1000.0, ex_index=5, ratio=0.75)
     assert residual_moves({"X": raw}) == []
+
+
+# ---------------------------------------------------------------------------
+# Routing: the feed labels every historical row with today's symbol
+# ---------------------------------------------------------------------------
+
+
+def feed(symbol: str, isin: str, ex_date: dt.date, multiplier: float) -> FeedAdjustment:
+    return FeedAdjustment(symbol=symbol, isin=isin, adjustment=split(ex_date, multiplier))
+
+
+def verified(symbol: str, ex_date: dt.date, multiplier: float) -> FeedAdjustment:
+    return FeedAdjustment(
+        symbol=symbol, isin="", adjustment=split(ex_date, multiplier), hand_verified=True
+    )
+
+
+CADILA = SymbolSpan(
+    first=dt.date(2015, 1, 1), last=dt.date(2022, 3, 4), isins=frozenset({"INE010B01027"})
+)
+ZYDUS = SymbolSpan(
+    first=dt.date(2022, 3, 7), last=dt.date(2026, 8, 5), isins=frozenset({"INE010B01027"})
+)
+
+
+def test_an_action_reaches_the_name_the_security_traded_under() -> None:
+    """The 7.2% of documented ratios that symbol-keying threw away.
+
+    NSE reports the **current** symbol on every historical row, so Cadila's
+    2015 split comes back labelled ZYDUSLIFE -- a name that first traded in
+    2022. Keyed by symbol it lands nowhere and does nothing, with no error.
+    """
+    entry = feed("ZYDUSLIFE", "INE010B01027", dt.date(2015, 10, 6), 0.2)
+    routed, unrouted, _ = route_adjustments([entry], {"CADILAHC": CADILA, "ZYDUSLIFE": ZYDUS})
+
+    assert unrouted == []
+    assert "ZYDUSLIFE" not in routed, "the 2022 name did not exist on the 2015 ex-date"
+    assert [a.multiplier for a in routed["CADILAHC"]] == [0.2]
+
+
+def test_a_security_outside_the_run_is_not_reported_as_unrouted() -> None:
+    """Absent is not the same as unplaceable.
+
+    A run restricted to twenty names must not report the other eight hundred
+    adjustments as problems, or the real ones become unfindable.
+    """
+    entry = feed("RELIANCE", "INE002A01018", dt.date(2024, 10, 28), 0.5)
+    routed, unrouted, _ = route_adjustments([entry], {"CADILAHC": CADILA})
+    assert routed == {} and unrouted == []
+
+
+def test_an_ambiguous_isin_is_reported_rather_than_guessed() -> None:
+    """Two live tickers on one ISIN means an assumption is wrong.
+
+    Picking one would apply an adjustment to a security that may not have had
+    it, and the choice would be invisible afterwards.
+    """
+    overlap = SymbolSpan(
+        first=dt.date(2015, 1, 1), last=dt.date(2026, 1, 1), isins=frozenset({"INE010B01027"})
+    )
+    entry = feed("ZYDUSLIFE", "INE010B01027", dt.date(2015, 10, 6), 0.2)
+    routed, unrouted, _ = route_adjustments([entry], {"CADILAHC": CADILA, "OTHER": overlap})
+    assert routed == {}
+    assert [u.symbol for u in unrouted] == ["ZYDUSLIFE"]
+
+
+def test_two_feed_actions_on_one_day_compound() -> None:
+    """VEEDOL, 2021-07-26: a 1:1 bonus and a 5-to-2 split, both real, x0.5 * x0.4."""
+    when = dt.date(2021, 7, 26)
+    spans = {"TIDEWATER": SymbolSpan(dt.date(2015, 1, 1), dt.date(2024, 10, 8), frozenset({"I1"}))}
+    entries = [feed("VEEDOL", "I1", when, 0.5), feed("VEEDOL", "I1", when, 0.4)]
+    routed, _, superseded = route_adjustments(entries, spans)
+    product = 1.0
+    for adjustment in routed["TIDEWATER"]:
+        product *= adjustment.multiplier
+    assert product == pytest.approx(0.2)
+    assert superseded == []
+
+
+def test_a_verified_verdict_replaces_the_feed_rather_than_stacking() -> None:
+    """The double-adjustment that fixing the routing bug exposed.
+
+    The six hand-verified entries were recovered by a person *because* the feed
+    rows were misrouted. Once routing worked, both landed on the same day: a
+    x0.25 split became x0.125, turning a real 76 per cent fall into a
+    fictitious 94 per cent gain. A verdict is one account of a whole day's
+    move, so it supersedes; it does not compound.
+    """
+    when = dt.date(2016, 3, 16)
+    spans = {"TIDEWATER": SymbolSpan(dt.date(2015, 1, 1), dt.date(2024, 10, 8), frozenset({"I1"}))}
+    entries = [feed("VEEDOL", "I1", when, 0.25), verified("TIDEWATER", when, 0.25)]
+    routed, _, superseded = route_adjustments(entries, spans)
+
+    assert [a.multiplier for a in routed["TIDEWATER"]] == [0.25]
+    assert len(superseded) == 1
+    assert not superseded[0].material, "these two agree; only disagreement is a finding"
+
+
+def test_a_superseded_action_that_disagrees_is_flagged() -> None:
+    """Disagreement means the feed subject was read incompletely.
+
+    Silently preferring the verdict would hide the parser defect that made the
+    verdict necessary.
+    """
+    when = dt.date(2016, 3, 16)
+    spans = {"TIDEWATER": SymbolSpan(dt.date(2015, 1, 1), dt.date(2024, 10, 8), frozenset({"I1"}))}
+    entries = [feed("VEEDOL", "I1", when, 0.5), verified("TIDEWATER", when, 0.25)]
+    _, _, superseded = route_adjustments(entries, spans)
+    assert superseded[0].material
+    assert "DISAGREE" in superseded[0].describe()
+
+
+# ---------------------------------------------------------------------------
+# The settlement series
+# ---------------------------------------------------------------------------
+
+
+def test_the_surveillance_series_are_kept() -> None:
+    """BE and BZ are the same share under a stricter settlement rule.
+
+    Dropping them does not produce missing data. It produces *absent* data, and
+    the sessions either side become adjacent, so a return gets computed across
+    a gap no holder ever experienced.
+    """
+    assert {"EQ", "BE", "BZ"} <= CASH_EQUITY_SERIES
+
+
+def test_the_sme_and_debt_series_are_excluded() -> None:
+    """A separate board and a different instrument, not a settlement variant."""
+    assert not CASH_EQUITY_SERIES & {"SM", "ST", "GB", "GS", "TB", "N1", "NE"}

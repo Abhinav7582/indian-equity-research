@@ -7,7 +7,7 @@ That is unsafe here, and the archive says so plainly. Every line below is a real
 single-day move in a liquid NSE security, checked against the downloaded feed:
 
     RELIANCE    2024-10-28  x0.5000   documented 1:1 bonus     -- adjust
-    BAJFINANCE  2016-09-08  x0.2000   documented 1:5 split     -- adjust
+    BAJFINANCE  2016-09-08  x0.1000   documented bonus + split -- adjust
     IRCTC       2021-10-28  x0.2000   documented 1:5 split     -- adjust
     YESBANK     2017-09-21  x0.2000   documented 1:5 split     -- adjust
 
@@ -28,6 +28,15 @@ split, and the claim came from a scan whose printed dates had the year sliced
 off, so a 2017 corporate action was read as the March 2020 crash. The argument
 survived; the example was wrong. Every row above now carries its date and was
 re-checked against the feed rather than recalled.
+
+The ``BAJFINANCE`` row was wrong too, and its error is the one this module now
+guards against. It read ``x0.2000, documented 1:5 split``. The subject is
+``Bonus 1:1/Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/-``
+-- two actions in one string -- and the price moved ``x0.1021``, not ``x0.20``.
+Reading only the split halved the adjustment and left a fabricated 49 per cent
+fall in a Nifty 50 constituent. Eleven feed rows in the 2015-2026 archive carry
+a bonus and a split together, ``TECHM 2015-03-19`` among them; see
+:data:`ActionType.BONUS_AND_SPLIT`.
 
 So: adjustments come from documents. Inference is reserved for cases a human has
 looked at and signed off.
@@ -191,6 +200,27 @@ def _as_ratio(numerator: float, denominator: float) -> tuple[int, int]:
     return round(numerator * scale), round(denominator * scale)
 
 
+def _bonus_ratio(text: str, lowered: str) -> tuple[int, int] | None:
+    """Read ``a:b`` from the bonus clause, returning ``(held, held + new)``.
+
+    Searched from the word "bonus" rather than across the whole subject. A
+    compound subject carries other numbers -- ``From Rs 10/- Per Share To Rs
+    2/-`` -- and a ratio regex loose enough to find ``1:1`` after a slash is
+    also loose enough to find something in ``10/- Per``. Anchoring on the word
+    costs one line and removes the class of error entirely.
+    """
+    start = lowered.find("bonus")
+    if start < 0:
+        return None
+    match = _BONUS_RATIO_RE.search(text[start:])
+    if not match:
+        return None
+    new_shares, held = int(match.group(1)), int(match.group(2))
+    if held <= 0 or new_shares <= 0:
+        return None
+    return held, new_shares + held
+
+
 def parse_subject(subject: str) -> ParsedSubject:
     """Read one NSE ``subject`` line.
 
@@ -215,6 +245,13 @@ def parse_subject(subject: str) -> ParsedSubject:
                 # the direction is taken from the numbers, not the noun.
                 numerator, denominator = _as_ratio(new, old)
                 kind = ActionType.CONSOLIDATION if new > old else ActionType.SPLIT
+                bonus = _bonus_ratio(text, lowered)
+                if bonus is not None:
+                    held, total = bonus
+                    return ParsedSubject(
+                        ActionType.BONUS_AND_SPLIT,
+                        *_as_ratio(numerator * held, denominator * total),
+                    )
                 return ParsedSubject(kind, numerator, denominator)
         return ParsedSubject(ActionType.SPLIT)
 
@@ -234,11 +271,9 @@ def parse_subject(subject: str) -> ParsedSubject:
         return ParsedSubject(ActionType.DEMERGER)
 
     if any(word in lowered for word in _BONUS_WORDS):
-        match = _BONUS_RATIO_RE.search(text)
-        if match:
-            new_shares, held = int(match.group(1)), int(match.group(2))
-            if held > 0 and new_shares > 0:
-                return ParsedSubject(ActionType.BONUS, held, new_shares + held)
+        bonus = _bonus_ratio(text, lowered)
+        if bonus is not None:
+            return ParsedSubject(ActionType.BONUS, *bonus)
         return ParsedSubject(ActionType.BONUS)
 
     if any(word in lowered for word in _RIGHTS_WORDS):
