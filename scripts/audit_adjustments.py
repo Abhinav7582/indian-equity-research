@@ -136,16 +136,34 @@ def main() -> int:
                     existing[(cells[0], cells[1])] = cells[6]
         print(f"carrying forward {len(existing)} existing verdict(s)")
 
-    documented: dict[tuple[str, dt.date], float] = {}
+    documented: dict[tuple[str, dt.date], float] = {}  # keyed by (ISIN, ex-date)
     action_files = sorted(ACTIONS.glob("*.json"))
     if not action_files:
         print(f"no corporate actions in {ACTIONS}.")
         print("Run: uv run python scripts/fetch_corporate_actions.py --fetch")
         return 1
+    # Matched on ISIN **or** symbol, because neither key works alone and the two
+    # fail in opposite directions:
+    #
+    #   symbol fails on a RENAME. MOTHERSUMI became MOTHERSON and MINDAIND
+    #   became UNOMINDA, so the bonus is in the feed under a name the price
+    #   series never used.
+    #
+    #   ISIN fails on a SPLIT -- which is exactly the event being matched. On
+    #   2024-01-05 NESTLEIND's bhavcopy ISIN changed INE239A01016 ->
+    #   INE239A01024 on the ex-date itself, while the feed still reports the
+    #   old INE239A01016 years later. The feed's ISIN is the one in force when
+    #   the record was created, not the one trading now.
+    #
+    # Either key alone silently presents a documented corporate action as an
+    # unexplained price collapse. The union is not elegant; it is correct.
     for path in action_files:
         for action in load_actions_json(path.read_bytes(), source=path.name):
-            if action.price_multiplier is not None:
-                symbol = action.source.split(":")[1] if ":" in action.source else ""
+            if action.price_multiplier is None:
+                continue
+            symbol = action.source.split(":")[1] if ":" in action.source else ""
+            documented[(action.isin, action.ex_date)] = action.price_multiplier
+            if symbol:
                 documented[(symbol, action.ex_date)] = action.price_multiplier
     print(f"documented price-changing actions: {len(documented):,}")
 
@@ -200,7 +218,11 @@ def main() -> int:
                 continue
 
             window = range(-cfg.action_window_days, cfg.action_window_days + 1)
-            if any((symbol, when + dt.timedelta(days=d)) in documented for d in window):
+            if any(
+                (key, when + dt.timedelta(days=d)) in documented
+                for d in window
+                for key in (isin, symbol)
+            ):
                 explained.append((when, symbol, multiplier))
                 continue
             move = index.get(when)

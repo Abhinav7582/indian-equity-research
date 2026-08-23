@@ -16,7 +16,7 @@ governing document for anything evidential — this file may not weaken it.
 | 1.5 | H4 regime overlay experiment | **Done — H4 REJECTED** |
 | 2 | Data layer: archiver, calendar, instrument master, validator, bhavcopy ingest, delisting register, adjustment engine | **Done** |
 | 3a | Universe construction | **Done — real Nifty 100 reconstructed.** Membership continuous July 2015 → August 2026, net size change zero. A5 proxy retained as scaffolding only |
-| 3b | Adjusted price series pipeline | **Partial** — feed acquired and audited. Of 487 large moves in liquid names: 262 explained by a documented action, 138 are listing days, 12 market-wide, **30 outstanding** in `data/reference/adjustment_audit.md` (was 120). A parser fix — NSE writes "To **Re** 1" for a one-rupee face value, and only "Rs" was accepted — explained 45 more automatically. Of the 30 left, 23 have nothing in the feed (crash candidates), 6 are demergers/rights needing judgement, 1 is an abbreviated subject. Then wire adjustments into the backtest path |
+| 3b | Adjusted price series pipeline | **Audit complete — 0 outstanding.** Of 487 large moves in liquid names: 270 explained by a documented action, 138 listing days, 12 market-wide, 67 hand-adjudicated (6 real actions, 61 crashes). Four lookup bugs found and fixed along the way: `Re` vs `Rs`, symbol-vs-ISIN matching, the date-ranged endpoint omitting renamed/delisted names, and `&` breaking a URL. Remaining: wire the adjustments into the backtest path |
 | 3c | Transaction cost model | **Done** |
 | 3d | Event-driven engine | **Done** |
 | 3e | Self-deception suite, mutation-tested | **Done** |

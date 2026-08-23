@@ -29,6 +29,7 @@ import http.cookiejar
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -36,6 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from indian_equity_research.ingest.corporate_actions_fetch import (
+    CORPORATE_ACTIONS_URL,
     plan_windows,
     window_filename,
     window_url,
@@ -77,6 +79,56 @@ def opener() -> urllib.request.OpenerDirector:
     return built
 
 
+def fetch_symbols(symbols: list[str], *, delay: float) -> int:
+    """Download the complete action history for named symbols.
+
+    Why this exists
+    ---------------
+    The date-ranged sweep misses actions for companies that were later renamed
+    or delisted. Twenty-nine bonuses and splits were absent from a full
+    2015-2026 quarterly download but present when the same securities were
+    queried by symbol -- the per-symbol endpoint returns history back to about
+    2008 and does not appear to apply the same filtering.
+
+    A gap that only affects renamed and delisted companies is the worst kind:
+    those are exactly the securities a survivorship-free universe must contain.
+    """
+    OUT.mkdir(parents=True, exist_ok=True)
+    client = opener()
+    saved = 0
+    for index, symbol in enumerate(symbols, start=1):
+        target = OUT / f"ca_symbol_{symbol.upper()}.json"
+        if target.exists():
+            print(f"  [{index}/{len(symbols)}] {symbol}: already present")
+            continue
+        # quote(), not raw interpolation. "M&MFIN" contains an ampersand,
+        # which starts a new query parameter -- the request silently becomes a
+        # query for "M" and returns an empty array that looks exactly like a
+        # company with no corporate actions.
+        url = (
+            f"{CORPORATE_ACTIONS_URL}?index=equities"
+            f"&symbol={urllib.parse.quote(symbol.upper(), safe='')}"
+        )
+        try:
+            with client.open(url, timeout=60) as response:
+                body = response.read()
+        except urllib.error.URLError as exc:
+            print(f"  {symbol}: request failed ({exc}). Stopping.")
+            return 1
+        try:
+            actions = load_actions_json(body, source=target.name)
+        except CorporateActionParseError as exc:
+            print(f"  {symbol}: {exc}")
+            return 1
+        target.write_bytes(body)
+        saved += 1
+        note = "" if actions else "   <-- EMPTY: symbol probably renamed or delisted"
+        print(f"  [{index}/{len(symbols)}] {symbol}: {len(actions)} equity actions{note}")
+        time.sleep(delay)
+    print(f"\nsaved {saved} symbol histories to {OUT}")
+    return 0
+
+
 def main() -> int:
     """Plan or run the download."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -86,7 +138,20 @@ def main() -> int:
     parser.add_argument("--fetch", action="store_true", help="actually download")
     parser.add_argument("--limit", type=int, default=0, help="stop after N windows")
     parser.add_argument("--delay", type=float, default=2.0, help="seconds between requests")
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        metavar="SYM",
+        help=(
+            "fetch the FULL history for these symbols instead of a date range. "
+            "The per-symbol endpoint returns everything back to ~2008, where the "
+            "date-ranged one silently omits renamed and delisted companies."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.symbols:
+        return fetch_symbols(args.symbols, delay=args.delay)
 
     windows = plan_windows(date.fromisoformat(args.start), date.fromisoformat(args.end))
     if args.limit:
