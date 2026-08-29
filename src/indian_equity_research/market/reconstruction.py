@@ -57,6 +57,8 @@ __all__ = [
     "NIFTY_200_UNION",
     "NIFTY_MIDCAP_100",
     "NIFTY_NEXT_50",
+    "NIFTY_NEXT_50_DERIVED",
+    "DifferenceIndexSpec",
     "IndexSpec",
     "Reconstruction",
     "ReconstructionError",
@@ -65,6 +67,7 @@ __all__ = [
     "isins_by_symbol",
     "load_roster",
     "reconstruct",
+    "reconstruct_difference",
     "reconstruct_union",
 ]
 
@@ -498,3 +501,143 @@ def reconstruct_union(
         releases_without_text=0,
     )
     return union, parts
+
+
+@dataclass(frozen=True, slots=True)
+class DifferenceIndexSpec:
+    """An index defined as one index minus another.
+
+    The Nifty Next 50 is exactly the Nifty 100 less the Nifty 50, and building
+    it that way is more reliable than parsing its own sections.
+
+    **Why.** Reconstructed directly from "Nifty Next 50" sections it leaves six
+    unapplied changes and drifts to 59 members. Reconstructed as a difference it
+    is exact, because both inputs meet the project's standard: the Nifty 50 and
+    the Nifty 100 each reconstruct with **zero** unapplied changes.
+
+    **And the subtraction is checkable.** The minuend must contain the
+    subtrahend at every snapshot, which was verified across all 33 -- so the
+    difference can never be a set built from names that were not there.
+
+    The residual size deviation is fully explained and is not an error.
+    ``TATAMTRDVR`` left the Nifty 50 in September 2017 but stayed in the Nifty
+    100 until 2020, so the difference correctly holds 51 names in exactly those
+    windows.
+    """
+
+    name: str
+    minuend: IndexSpec
+    subtrahend: IndexSpec
+    declared_size: int
+
+    def describe(self) -> str:
+        """One line for a report header."""
+        return (
+            f"{self.name} ({self.declared_size} constituents, "
+            f"as {self.minuend.name} minus {self.subtrahend.name})"
+        )
+
+
+#: The Nifty Next 50, built from the two universes that reconstruct cleanly.
+#: Amendment A11 Route 2.
+NIFTY_NEXT_50_DERIVED: Final = DifferenceIndexSpec(
+    name="Nifty Next 50",
+    minuend=NIFTY_100,
+    subtrahend=NIFTY_50,
+    declared_size=50,
+)
+
+
+def reconstruct_difference(
+    spec: DifferenceIndexSpec,
+    *,
+    stop_at: date,
+    circulars: Path | None = None,
+    bhavcopy: Path | None = None,
+    canonical: dict[str, str] | None = None,
+) -> tuple[Reconstruction, Reconstruction, Reconstruction]:
+    """Reconstruct both inputs and subtract one from the other.
+
+    Both inputs share one identity map, for the reason given in
+    :func:`reconstruct_union`: resolved through different maps they could
+    disagree about whether a renamed company is one security or two.
+
+    Args:
+        spec: The derived index.
+        stop_at: Passed to both inputs.
+        circulars: Press-release folder.
+        bhavcopy: Price archive, for symbol identity.
+        canonical: A precomputed identity map, shared by both inputs.
+
+    Returns:
+        ``(difference, minuend, subtrahend)``. The difference carries both
+        inputs' unapplied changes, so one check still decides whether to
+        proceed.
+
+    Raises:
+        ReconstructionError: if the subtrahend is not contained in the minuend
+            at every snapshot. That would mean subtracting names the larger
+            index never held, and the result would be a set nobody can
+            interpret.
+    """
+    shared = (
+        canonical
+        if canonical is not None
+        else canonical_symbols(isins_by_symbol(bhavcopy=bhavcopy))
+    )
+    larger = reconstruct(
+        spec.minuend, stop_at=stop_at, circulars=circulars, bhavcopy=bhavcopy, canonical=shared
+    )
+    smaller = reconstruct(
+        spec.subtrahend, stop_at=stop_at, circulars=circulars, bhavcopy=bhavcopy, canonical=shared
+    )
+
+    begins = max(
+        larger.history.snapshots[0].effective_from, smaller.history.snapshots[0].effective_from
+    )
+    moments = sorted(
+        {
+            snapshot.effective_from
+            for part in (larger, smaller)
+            for snapshot in part.history.snapshots
+            if snapshot.effective_from >= begins
+        }
+    )
+    snapshots: list[MembershipSnapshot] = []
+    for when in moments:
+        big = members_on(larger.history, when)
+        small = members_on(smaller.history, when)
+        if not small <= big:
+            stray = ", ".join(sorted(small - big))
+            raise ReconstructionError(
+                f"on {when}, {spec.subtrahend.name} holds names {spec.minuend.name} does "
+                f"not: {stray}. Subtracting them would produce a set built from members "
+                f"the larger index never had, and no reading of the result would be "
+                f"correct."
+            )
+        snapshots.append(MembershipSnapshot(effective_from=when, members=big - small))
+
+    deviations = tuple(
+        SizeDeviation(effective_from=s.effective_from, size=s.size)
+        for s in snapshots
+        if s.size != spec.declared_size
+    )
+    difference = Reconstruction(
+        spec=IndexSpec(
+            name=spec.name,
+            roster_dir=spec.minuend.roster_dir,
+            declared_size=spec.declared_size,
+        ),
+        history=MembershipHistory(
+            snapshots=tuple(snapshots),
+            unapplied=larger.history.unapplied + smaller.history.unapplied,
+            size_deviations=deviations,
+            roster_date=max(larger.history.roster_date, smaller.history.roster_date),
+            declared_size=spec.declared_size,
+        ),
+        canonical=shared,
+        changes_parsed=larger.changes_parsed + smaller.changes_parsed,
+        changes_hand_read=larger.changes_hand_read + smaller.changes_hand_read,
+        releases_without_text=0,
+    )
+    return difference, larger, smaller

@@ -1360,7 +1360,8 @@ Sharpe Ratio.
 |---|---|---|---|---|---|---|
 | **1** | 2026-08-06 | **H4** | A2 regime rule as declared: Nifty 100 < 200d SMA AND India VIX > trailing 756d 80th pct; monthly evaluation; 1-period lag; 0.55% round trip; 20% STCG; cash at 0% | NSE Indices + NSE: Nifty 100 PR 2003-2026, Momentum 30 TRI 2005-2026, India VIX 2010-2026, Momentum30+G-Sec 75:25 2011-2026 | `5fed927` | **REJECTED** (see below) |
 | **2** | 2026-08-23 | **H2** | A9 as declared: 10 holdings, top decile of 12-1 momentum in the point-in-time Nifty 100, equal weight, monthly, decided on previous close and filled at next open, ₹3,00,000, 1 sell order per exit | Bhavcopy 2015-2026 back-adjusted; NSE corporate actions; reconstructed point-in-time Nifty 100; Nifty 100 TRI | `d36ea3e` | **REJECTED** (see below) |
-| **3** | 2026-08-23 | **H1** | As registered: 12-1 momentum deciles within the point-in-time Nifty 100, forward one-month excess return over the Nifty 100 TRI, monthly, **gross** | Same as trial #2 | *pending* | **REJECTED** (see below) |
+| **3** | 2026-08-23 | **H1** | As registered: 12-1 momentum deciles within the point-in-time Nifty 100, forward one-month excess return over the Nifty 100 TRI, monthly, **gross** | Same as trial #2 | `5aff43b` | **REJECTED** (see below) |
+| **6** | 2026-08-29 | **A11 Route 2** | Size tiers: mean rank IC of 12-1 momentum **within** the Nifty 50 against **within** the Nifty Next 50, monthly, gross, 2016-2021, identical to #3 except the universe | Bhavcopy 2015-2026 back-adjusted; Nifty 50 and Nifty 100 rosters; Nifty 100 TRI | *pending* | **SUGGESTIVE NEGATIVE** (see below) |
 
 ---
 
@@ -1590,6 +1591,89 @@ sources rested on a foundation that has not held.**
 
 ---
 
+### Trial #6 detail — A11 Route 2, size tiers
+
+**Run:** 2026-08-29 · 70 monthly rebalances, 2016-2021, gross. Holdout
+untouched.
+
+**Both universes reconstructed cleanly**, to the standard the Nifty 200 could
+not meet:
+
+```
+Nifty 50        0 unapplied, sizes [50, 51]
+Nifty 100       0 unapplied, sizes [100, 101]
+Nifty Next 50   0 unapplied, sizes [50, 51]      (derived, see below)
+```
+
+Every size deviation is `TATAMTRDVR`, the security already understood from the
+Nifty 100 reconstruction — and the pattern corroborates independent reporting:
+the DVR left the **Nifty 50** in September 2017 but stayed in the Nifty 100
+until 2020, so the derived Next 50 correctly holds 51 in exactly those windows.
+
+**Method note, recorded because it was a decision.** The Nifty Next 50
+reconstructed *directly* from its own press-release sections leaves **six**
+unapplied changes and drifts to 59 members. It was therefore built as **Nifty
+100 minus Nifty 50**, both of which reconstruct with zero unapplied. The
+containment was verified at all 33 snapshots, so the subtraction can never
+produce names the larger index did not hold. **This decision reads no returns**
+and was taken before any tier IC was computed, which is why it is a method note
+rather than a new amendment.
+
+**The result:**
+
+| | Nifty 50 | Nifty Next 50 |
+|---|---:|---:|
+| Mean rank IC | **+0.0360** | **+0.0414** |
+| Newey-West \|t\| | 1.14 | **1.57** |
+| Rebalances | 70 | 70 |
+
+| Quintile, monthly excess, gross | Nifty 50 | Nifty Next 50 |
+|---|---:|---:|
+| Q1 | −0.575% | −0.336% |
+| Q2 | −0.326% | −0.507% |
+| Q3 | −0.209% | −0.516% |
+| Q4 | +0.063% | +0.119% |
+| Q5 | +0.089% | +0.231% |
+
+**Scored against the prediction registered in A11:**
+
+| | Observed | Required | |
+|---|---|---|---|
+| Smaller tier scores higher | +0.0054 | > 0 | PASS |
+| Next 50 \|t\| distinguishable from zero | 1.57 | ≥ 3.0 | **FAIL** |
+
+**Verdict: SUGGESTIVE NEGATIVE.** The prediction's direction held and its
+substance did not. A11 fixed in advance that this combination is not support,
+and it is not being read as support.
+
+**Why the direction is not encouraging either.** The gap is **+0.0054** on ICs
+of about 0.04 — a 15% relative difference, nowhere near enough to explain why
+H2 lost 3.32% a year gross. And the three measurements now available sit in one
+narrow band:
+
+```
+Nifty 50    +0.0360      (trial #6)
+Nifty 100   +0.0378      (trial #3)
+Next 50     +0.0414      (trial #6)
+```
+
+The Nifty 100 falls between its two halves, as it arithmetically should — an
+internal consistency check that passes. Across the whole size range this
+archive can measure, 12-1 momentum is **weak, similar, and never
+distinguishable from noise**.
+
+**What this closes.** The most plausible explanation for trials #2 and #3 was
+that the Nifty 100 is too large-cap. Moving down one tier moves the IC by
+0.005 and leaves the t-statistic at 1.57. That does not rule out a real effect
+in genuine mid- or small-caps, which are outside this archive's reconstructable
+range — but it removes the nearest and most tempting escape hatch, and it does
+so on universes that reconstruct perfectly rather than ones that do not.
+
+**What it does not close.** Neither tier was *tested* for tradeability. This is
+H1's question, not H2's, and it is gross.
+
+---
+
 ## The cost floor, measured
 
 Established 2026-08-18 from the validated cost model, reading **no returns**
@@ -1655,10 +1739,12 @@ separates them.
 ---
 
 *Every hypothesis in this file was registered before the data to test it
-existed. **Three** trials have since been run and are recorded in the trial
-register — **#1 H4**, **#2 H2** and **#3 H1**, all rejected — and the price
-archive runs 2015-2026. No result has been observed for **H3, H5 or H6**. The
-declared holdout, 2022-01-01 to 2025-12-31, remains **untouched**.*
+existed. **Four** trials have since been run and are recorded in the trial
+register — **#1 H4**, **#2 H2**, **#3 H1** all rejected, and **#6** a suggestive
+negative on the size question — and the price archive runs 2015-2026. Trials
+**#4 and #5 were never spent**: the Nifty 200 universe would not reconstruct.
+No result has been observed for **H3, H5 or H6**. The declared holdout,
+2022-01-01 to 2025-12-31, remains **untouched**.*
 
 *Three rejections is not a failure of the project. It is the project working:
 each was rejected against criteria fixed before the data existed, and none

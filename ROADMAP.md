@@ -22,12 +22,12 @@ governing document for anything evidential — this file may not weaken it.
 | 3e | Self-deception suite, mutation-tested | **Done** |
 | 3f | Statistical gates (DSR, PBO) | **Done** |
 | 3g | Purged / embargoed walk-forward CV | **Done** |
-| 4 | Hypothesis testing on the real universe | **H2 and H1 both REJECTED on the Nifty 100** (trials #2 and #3, 2026-08-23). H2: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI; the signal lost **3.32% before any cost**, so costs were not the cause. H1 then explained why — mean rank IC **+0.0378** with **t = 1.47** (needs 3.0), spread positive in **2 of 5** sub-periods, and **decile 10 returned −0.138%/month** against D9's +0.403%. The effect is weak, unstable, and absent from the top decile a small book must hold. Holdout untouched. **Nifty 200 extension attempted and BLOCKED ON DATA QUALITY** (A10 outcome, 2026-08-29) — both datasets arrived and are sound, but the universe will not reconstruct: 13 unapplied changes parsing Nifty 200 sections, 14 building it as `Nifty 100 ∪ Nifty Midcap 100`. Cause is an incomplete press-release archive (18 releases held for 2015 against 165 for 2025). Trials #4 and #5 not spent. H3, H5, H6 untested |
+| 4 | Hypothesis testing on the real universe | **H2 and H1 both REJECTED on the Nifty 100** (trials #2 and #3, 2026-08-23). H2: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI; the signal lost **3.32% before any cost**, so costs were not the cause. H1 then explained why — mean rank IC **+0.0378** with **t = 1.47** (needs 3.0), spread positive in **2 of 5** sub-periods, and **decile 10 returned −0.138%/month** against D9's +0.403%. The effect is weak, unstable, and absent from the top decile a small book must hold. Holdout untouched. **Nifty 200 extension attempted and BLOCKED ON DATA QUALITY** (A10 outcome, 2026-08-29) — both datasets arrived and are sound, but the universe will not reconstruct: 13 unapplied changes parsing Nifty 200 sections, 14 building it as `Nifty 100 ∪ Nifty Midcap 100`. Cause is an incomplete press-release archive (18 releases held for 2015 against 165 for 2025). Trials #4 and #5 not spent. **A11 Route 2 then asked the size question a different way (trial #6, 2026-08-29):** rank IC within the Nifty 50 vs within the Nifty Next 50, both reconstructing with 0 unapplied. Next 50 **+0.0414** against Nifty 50's **+0.0360** — direction as predicted, but **t = 1.57** against a required 3.0. **SUGGESTIVE NEGATIVE.** With the Nifty 100 at +0.0378 sitting between its two halves, momentum is weak, similar and never significant across the whole size range this archive can measure. H3, H5, H6 untested |
 | 5 | Allocation system | Not started |
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**887 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**890 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 
@@ -359,9 +359,15 @@ intra-review maintenance changes, which is exactly what is missing.
 
 | Route | Needs | Status |
 |---|---|---|
-| **1. Sensitivity band** — run the study twice, full reconstruction against one excluding the 20 implicated securities; disagreement on any criterion forces INCONCLUSIVE | nothing | code ready |
-| **2. Size tiers** — ask the size question on the Nifty 50 vs Nifty Next 50, the cleanest-parsing indices in the archive | 2 roster downloads | specs added, runner pending |
-| **3. Hand-adjudicate the 13 changes** — evidence-only, the method that fixed the Nifty 100's 2021 gap | your time | worklist written |
+| **1. Sensitivity band** — run the Nifty 200 study twice, full reconstruction against one excluding the 20 implicated securities; disagreement on any criterion forces INCONCLUSIVE | nothing | **not run** — see below |
+| **2. Size tiers** — Nifty 50 vs Nifty Next 50 | done | **RUN, trial #6: SUGGESTIVE NEGATIVE.** Both universes reconstruct with 0 unapplied. Next 50 IC +0.0414 against Nifty 50's +0.0360 — direction as predicted, but t = 1.57 against a required 3.0 |
+| **3. Hand-adjudicate the 13 changes** — evidence-only, the method that fixed the Nifty 100's 2021 gap | your time | worklist written, not started |
+
+**Route 2's result changes what Route 1 is worth.** The nearest explanation for
+trials #2 and #3 — that the Nifty 100 is too large-cap — moved the IC by 0.005
+and left it indistinguishable from noise. Spending trials #4 and #5 to ask a
+harder version of a question that has just been largely answered raises the
+Deflated Sharpe bar for everything after it. Worth a decision before running.
 
 Route 3 first if there is time: if it closes, Route 1 is unnecessary and the
 study runs with no caveat. Worklist in
