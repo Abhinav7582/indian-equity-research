@@ -207,7 +207,12 @@ overwritten.
 - The filter excludes more than 60% of the universe (a filter that aggressive
   is a different strategy, not a filter).
 
-**Status:** `NOT_TESTED`
+**Status:** `NOT_TESTED` — and see the Phase 4 closeout, 2026-08-29. H3 was
+registered as a **refinement to a working strategy**. With the base case
+negative before costs (trials #2, #3, #6, #7), a quality filter would have to
+**create** the edge rather than improve it, which is a far stronger claim than
+this hypothesis was written to make. Not withdrawn; not worth a trial at current
+odds.
 **Registered:** 2026-08-04
 
 ---
@@ -301,7 +306,10 @@ Sharpe; the gross-minus-net gap for each frequency.
 supported and the cost model is doing exactly the job it exists to do. That
 outcome must be reported explicitly, not summarised as "monthly is better."
 
-**Status:** `NOT_TESTED`
+**Status:** `NOT_TESTED` — close to moot after the Phase 4 closeout, 2026-08-29.
+Weekly rebalancing means more turnover, more charges and more short-term capital
+gains tax on an effect that did not survive monthly. Not withdrawn; not worth a
+trial at current odds.
 **Registered:** 2026-08-04
 
 ---
@@ -355,7 +363,10 @@ that a future weak result is not mistaken for a weak *effect*, and so that no
 retrospective surveillance dataset is later constructed by inference and
 treated as if it had been observed.
 
-**Status:** `NOT_TESTED`
+**Status:** `NOT_TESTED` — and see the Phase 4 closeout, 2026-08-29. Like H3,
+H6 was registered as a **refinement to a working strategy**. With the base case
+negative before costs, governance exclusions would have to **create** the edge
+rather than improve it. Not withdrawn; not worth a trial at current odds.
 **Registered:** 2026-08-04
 
 ---
