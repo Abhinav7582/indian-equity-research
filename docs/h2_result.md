@@ -1,5 +1,20 @@
 # H2 — rejected, and not for the reason this project prepared for
 
+> **ADDENDUM, 2026-08-29 — the mechanism section below is now doubtful.**
+> Baseline B3, which Amendment A1 declared mandatory on 2026-08-04, was never
+> scored. Run since: the **NIFTY 200 Momentum 30 index returned 25.10% a year
+> over exactly this window**, against the Nifty 100 TRI's 17.13% and this
+> strategy's 10.85%. ₹3,00,000 would have become ₹11,22,652 rather than
+> ₹5,50,426.
+>
+> Momentum did not have a poor window in India in 2016–2021. It had an
+> exceptional one. The rejection stands — the criteria named the Nifty 100 TRI
+> and it failed them — but "the signal lost" is very unlikely to be the right
+> reading. The likelier reading is that **we tested a different signal from the
+> one that worked**: raw 12-1 return, where NSE's index uses *risk-adjusted*
+> momentum. See `docs/retrospective_2026_08.md` and the trial #2 addendum in
+> `HYPOTHESES.md`.
+
 **Trial #2, run 2026-08-23.** Specification fixed in advance by Amendment A9;
 criteria fixed at registration on 2026-08-04. The declared holdout
 (2022-01-01 to 2025-12-31) was **not touched**.

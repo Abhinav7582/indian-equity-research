@@ -116,6 +116,11 @@ def report(result: H2Result) -> None:
         f"{'Final value':<34}{result.strategy_post_tax_curve[-1]:>14,.0f}"
         f"{result.benchmark_net_curve[-1]:>14,.0f}"
     )
+    print("\nREGISTERED BASELINES  (an amendment makes each of these mandatory)")
+    for tag, cagr in sorted(result.baselines.items()):
+        gap = result.net_cagr - cagr
+        print(f"  {tag}  {cagr:>7.2%}   strategy {gap:+.2%}/yr")
+
     print(f"\nExcess (annualised): {result.excess_cagr:+.2%}")
     print(f"Monthly excess: {result.excess_test.describe()}\n")
 

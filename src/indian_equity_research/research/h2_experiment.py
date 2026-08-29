@@ -18,9 +18,17 @@ comparison would overstate the strategy by the index's dividend yield, roughly
 
 But the TRI is not itself investable either, so it is reported alongside a
 **net benchmark**: the same index less a 0.20% annual expense ratio, which is
-what a Nifty 100 index fund actually costs, and less LTCG at 12.5% on the
-terminal gain, since a buy-and-hold investor realises once. The strategy must
-beat that to be worth running, and beating the raw TRI is not sufficient.
+what a Nifty 100 index fund actually costs. The strategy must beat that to be
+worth running, and beating the raw TRI is not sufficient.
+
+**The benchmark is deliberately left pre-tax**, and this is a real asymmetry
+worth naming. The strategy's figure is net of capital gains tax; the benchmark's
+is not, because a buy-and-hold holder defers realisation. Taxing the benchmark
+too would lower it and make the strategy easier to beat, so leaving it pre-tax
+is the conservative direction. An earlier version of this docstring claimed LTCG
+*was* applied while the code applied only the expense ratio. The code was right
+and the docstring wrong; the post-tax figure is reported as a sensitivity in
+``HYPOTHESES.md`` rather than becoming the criterion.
 
 Warm-up, and the year it costs
 ------------------------------
@@ -70,6 +78,9 @@ __all__ = [
     "HOLDOUT_END",
     "HOLDOUT_START",
     "INDEX_FUND_EXPENSE_RATIO",
+    "REQUIRED_BASELINES",
+    "Baseline",
+    "BaselineOmitted",
     "H2Config",
     "H2Result",
     "HoldoutBreach",
@@ -87,6 +98,53 @@ HOLDOUT_END: Final = date(2025, 12, 31)
 INDEX_FUND_EXPENSE_RATIO: Final = 0.0020
 
 _WARMUP_SESSIONS: Final = FORMATION_SESSIONS + SKIP_SESSIONS
+
+
+@dataclass(frozen=True, slots=True)
+class Baseline:
+    """A comparison an amendment made mandatory."""
+
+    tag: str
+    name: str
+    directory: Path
+    expense_ratio: float
+    declared_by: str
+
+
+# Every baseline a registered amendment requires. **B3 is the reason this
+# registry exists.** Amendment A1 made the momentum index a blocking baseline on
+# 2026-08-04; trial #2 ran on 2026-08-23 scoring only the Nifty 100 TRI, and
+# nothing noticed. The data had been on disk the whole time.
+#
+# An amendment that requires a comparison, data that is present, and no check
+# that the two ever met -- that is the failure this guard closes. Adding a
+# baseline here makes it mandatory everywhere, and :func:`run_h2` refuses to
+# return a result without it.
+REQUIRED_BASELINES: Final = (
+    Baseline(
+        tag="B1",
+        name="Nifty 100 TRI",
+        directory=Path("data/raw/indices/nifty100_tri"),
+        expense_ratio=INDEX_FUND_EXPENSE_RATIO,
+        declared_by="H2 as registered",
+    ),
+    Baseline(
+        tag="B3",
+        name="NIFTY200 Momentum 30",
+        directory=Path("data/raw/indices/nifty200_momentum30"),
+        expense_ratio=0.0022,
+        declared_by="Amendment A1",
+    ),
+)
+
+
+class BaselineOmitted(RuntimeError):  # noqa: N818 - it is an omission, not an error about one
+    """Raised when a registered baseline was not scored.
+
+    Never caught and worked around. The whole point is that a result cannot be
+    produced while a declared comparison is missing -- which is exactly what
+    happened to B3 for six days and three documents.
+    """
 
 
 class HoldoutBreach(RuntimeError):  # noqa: N818 - it is a breach, not an error about one
@@ -129,6 +187,7 @@ class H2Result:
     total_turnover: float
     rebalances: int
     residual_warnings: tuple[str, ...]
+    baselines: dict[str, float]
 
     @property
     def net_cagr(self) -> float:
@@ -137,7 +196,7 @@ class H2Result:
 
     @property
     def benchmark_net_cagr(self) -> float:
-        """Benchmark CAGR after expense ratio and terminal LTCG."""
+        """Benchmark CAGR after the expense ratio. Pre-tax, deliberately."""
         return _cagr(self.benchmark_net_curve, self.dates)
 
     @property
@@ -325,6 +384,27 @@ def run_h2(
     post_tax = post_tax[:span]
     benchmark = benchmark[:span]
 
+    # Score every baseline a registered amendment requires, and refuse without
+    # them. See REQUIRED_BASELINES for why this guard exists.
+    scored: dict[str, float] = {}
+    missing: list[str] = []
+    for required in REQUIRED_BASELINES:
+        try:
+            levels = load_tri(required.directory)
+        except FileNotFoundError:
+            missing.append(f"{required.tag} ({required.name}, declared by {required.declared_by})")
+            continue
+        curve = _benchmark_curve(levels, dates, cfg.initial_capital, required.expense_ratio)
+        scored[required.tag] = _cagr(curve[:span], dates[: len(curve[:span])])
+    if missing:
+        raise BaselineOmitted(
+            f"{len(missing)} registered baseline(s) could not be scored: "
+            f"{'; '.join(missing)}. An amendment made each of these mandatory, so a "
+            f"result without them is not the comparison that was registered. This is "
+            f"the exact failure that let trial #2 run for six days scored against one "
+            f"benchmark when two were required."
+        )
+
     monthly = _monthly_excess(dates, post_tax, benchmark)
     return H2Result(
         config=cfg,
@@ -339,6 +419,7 @@ def run_h2(
         total_turnover=result.total_turnover,
         rebalances=len(rebalance_days),
         residual_warnings=tuple(residual_warnings),
+        baselines=scored,
     )
 
 

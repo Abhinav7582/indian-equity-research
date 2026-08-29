@@ -1510,6 +1510,84 @@ weak result rather than a confirmation.
 
 ---
 
+### Trial #2, ADDENDUM — Baseline B3 scored at last, 2026-08-29
+
+**Amendment A1 made the NIFTY 200 Momentum 30 index a blocking baseline on
+2026-08-04.** Trial #2 was scored against the Nifty 100 TRI only. **The check
+was never run**, although the data had been in
+`data/raw/indices/nifty200_momentum30/` since before the trial. This addendum
+runs it.
+
+Over exactly the trial #2 window, 2016-02-09 to 2021-12-31, on ₹3,00,000:
+
+| | Final | CAGR | After terminal LTCG | CAGR |
+|---|---:|---:|---:|---:|
+| H2 strategy, gross | ₹6,50,655 | 14.04% | ₹6,22,448 | 13.19% |
+| **H2 strategy, net of everything** | **₹5,50,426** | **10.85%** | ₹5,34,748 | 10.31% |
+| Nifty 100 TRI less 0.20% — **B1** | ₹7,61,583 | 17.13% | ₹7,19,510 | 16.01% |
+| **NIFTY200 Momentum 30 less 0.22% — B3** | **₹11,22,652** | **25.10%** | ₹10,35,445 | 23.40% |
+
+```
+H2 net vs B1    -6.28%/yr   (-5.16% like-for-like post-tax)
+H2 net vs B3   -14.25%/yr  (-12.55% like-for-like post-tax)
+```
+
+**The investable momentum product more than doubled the strategy's final
+value.** ₹11.2 lakh against ₹5.5 lakh.
+
+**What this does to trial #2.** The verdict is unchanged — H2 was rejected
+against criteria naming the Nifty 100 TRI, and it fails B3 far more heavily. But
+the **explanation** recorded in `docs/h2_result.md` is now doubtful. That
+document says the signal did not work in this window. Something recognisably
+momentum returned **25.1% a year** in this window. The failure is far more
+likely to be in our specification than in the market.
+
+**A note on the post-tax column, and why it does not become the criterion.**
+`h2_experiment.py`'s docstring claimed the benchmark was net of terminal LTCG;
+the code applied only the expense ratio. The docstring has been corrected to
+match the code. The post-tax figures are reported as a **sensitivity, not a
+benchmark change** — lowering a benchmark after failing it is precisely the move
+this register exists to prevent, and it is not being made. Every verdict holds
+under both readings.
+
+**Process failure, recorded plainly.** An amendment declared a mandatory
+comparison, the data was present, and nothing in the pipeline checked it had
+been made. That is the largest process failure in this project to date. A guard
+now refuses to print a verdict when a registered baseline is missing from the
+result table.
+
+---
+
+### The statistical power available, measured 2026-08-29
+
+Given the observed effect sizes and IC volatility, how long a sample is needed
+to clear the registered bar of **t ≥ 3.0**?
+
+| Study | IC | t | n | Months for t=3 | **Years** |
+|---|---:|---:|---:|---:|---:|
+| H1, Nifty 100 (#3) | 0.0378 | 1.47 | 70 | 292 | **24.3** |
+| Nifty 50 (#6) | 0.0360 | 1.14 | 70 | 485 | **40.4** |
+| Nifty Next 50 (#6) | 0.0414 | 1.57 | 70 | 256 | **21.3** |
+
+*Back-solves the standard error from the reported HAC t; assumes the effect size
+and IC volatility persist.*
+
+**The development window is 5.9 years.** Detecting an effect of this magnitude
+at this bar needs **twenty to forty years** of monthly observations.
+
+This does not make the criteria wrong. The t ≥ 3.0 threshold follows Harvey,
+Liu & Zhu (2016) and exists because a t of 2 across a multiple-tested literature
+means little. But it must be read alongside every rejection in this register:
+
+> **These hypotheses were registered with a bar the available data cannot clear
+> for an effect of this size — whether or not the effect is real.**
+
+A rejection here is therefore substantially a statement about sample size, and
+not only about the market. Extending the price archive backwards to ~2005 would
+roughly double the sample and move t from 1.47 toward 2.1 — closer, still short.
+
+---
+
 ### Trial #3 detail — H1 momentum monotonicity
 
 **Run:** 2026-08-23 · **Window:** 2016-02-09 to 2021-11-01, 70 monthly
