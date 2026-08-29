@@ -1480,6 +1480,7 @@ Sharpe Ratio.
 | **1** | 2026-08-06 | **H4** | A2 regime rule as declared: Nifty 100 < 200d SMA AND India VIX > trailing 756d 80th pct; monthly evaluation; 1-period lag; 0.55% round trip; 20% STCG; cash at 0% | NSE Indices + NSE: Nifty 100 PR 2003-2026, Momentum 30 TRI 2005-2026, India VIX 2010-2026, Momentum30+G-Sec 75:25 2011-2026 | `5fed927` | **REJECTED** (see below) |
 | **2** | 2026-08-23 | **H2** | A9 as declared: 10 holdings, top decile of 12-1 momentum in the point-in-time Nifty 100, equal weight, monthly, decided on previous close and filled at next open, ₹3,00,000, 1 sell order per exit | Bhavcopy 2015-2026 back-adjusted; NSE corporate actions; reconstructed point-in-time Nifty 100; Nifty 100 TRI | `d36ea3e` | **REJECTED** (see below) |
 | **3** | 2026-08-23 | **H1** | As registered: 12-1 momentum deciles within the point-in-time Nifty 100, forward one-month excess return over the Nifty 100 TRI, monthly, **gross** | Same as trial #2 | `5aff43b` | **REJECTED** (see below) |
+| **7** | 2026-08-29 | **A12** | NSE's own momentum signal: 6m and 12m returns each ÷ trailing volatility, cross-sectionally standardised and averaged, no skip. Nifty 100, monthly, gross. Identical to #3 except the signal | Same as trial #2 | *pending* | **NOT SUPPORTED** (see below) |
 | **6** | 2026-08-29 | **A11 Route 2** | Size tiers: mean rank IC of 12-1 momentum **within** the Nifty 50 against **within** the Nifty Next 50, monthly, gross, 2016-2021, identical to #3 except the universe | Bhavcopy 2015-2026 back-adjusted; Nifty 50 and Nifty 100 rosters; Nifty 100 TRI | *pending* | **SUGGESTIVE NEGATIVE** (see below) |
 
 ---
@@ -1871,6 +1872,83 @@ H1's question, not H2's, and it is gross.
 
 ---
 
+### Trial #7 detail — A12, NSE's own momentum signal
+
+**Run:** 2026-08-29 · Nifty 100, 70 monthly rebalances, 2016-2021, gross.
+Holdout untouched. Identical to trial #3 in every respect **except the signal**
+— same universe, same dates, same forward returns, same statistic, the same
+lines of code from the ranking onward.
+
+| | raw 12-1 | risk-adjusted |
+|---|---:|---:|
+| Mean rank IC | **+0.0378** | **+0.0239** |
+| Newey-West \|t\| | 1.47 | **1.04** |
+| D10 − D1 per month | +0.461% | **+0.042%** |
+| Monotonicity | +0.758 | **+0.394** |
+
+**Scored against the prediction registered in A12:**
+
+| | Observed | Required | |
+|---|---|---|---|
+| Beats the raw 12-1 IC | +0.0239 vs +0.0378 | higher | **FAIL** |
+| \|t\| ≥ 3.0 | 1.04 | ≥ 3.0 | **FAIL** |
+
+**Verdict: NOT SUPPORTED. The signal is not the explanation.**
+
+NSE's definition scored **worse** than ours on this universe — lower IC, lower
+t, a decile spread of four basis points a month against forty-six, and
+monotonicity roughly halved. The prediction was not merely unmet; it was
+inverted.
+
+**A verification that passed quietly and is worth stating.** The raw 12-1 signal
+was **re-measured** in this run rather than quoted, with a check that would
+print a warning if it disagreed with trial #3 by more than 0.0005. It came back
+at exactly **+0.0378**. The harness reproduces the earlier trial, so the
+comparison is like-for-like and the difference is genuinely the signal.
+
+### What now explains the B3 gap — and what does not
+
+Four candidate explanations for the momentum index returning 25.10% while our
+strategy returned 10.85%:
+
+| Candidate | Status |
+|---|---|
+| **Signal** — raw vs risk-adjusted | **Ruled out** by this trial. Theirs is worse here |
+| **Universe** — Nifty 100 vs Nifty 200 | Largely ruled out by trial #6: one tier down moved the IC by 0.005 |
+| **Concentration and weighting** — 30 names, free-float × score, capped | **Untested.** No free-float data |
+| **Cadence** — semi-annual vs monthly | Untested; lower turnover, lower cost, different holding period |
+
+Worth recording alongside: the NIFTY 200 Momentum 30 index beat **its own parent
+universe** — the Nifty 200 TRI returned 17.50% over the same window against the
+momentum index's 25.38%, a genuine **+7.88% a year from momentum selection**.
+Momentum selection worked in India in this window. It did not work in our hands,
+and after trial #7 the reason is not the signal definition.
+
+### The position after seven trials
+
+```
+raw 12-1, Nifty 100      IC +0.0378   t 1.47
+raw 12-1, Nifty 50       IC +0.0360   t 1.14
+raw 12-1, Next 50        IC +0.0414   t 1.57
+risk-adjusted, Nifty 100 IC +0.0239   t 1.04
+```
+
+**Two signals, three universes, every cost treatment.** Every measurement lands
+between 0.024 and 0.041 with a t-statistic between 1.04 and 1.57, and the
+power calculation says this data would need twenty to forty years to resolve an
+effect that size.
+
+That is not a near miss. It is a consistent reading that **this archive cannot
+find a tradeable momentum edge for this account**, and the two most plausible
+escapes — a bigger universe and a better signal — have now both been tested and
+neither helped.
+
+What remains untested is weighting and concentration, which needs free-float
+market cap this project does not hold, and which A7's ₹3,00,000 breadth budget
+would constrain heavily even if it did.
+
+---
+
 ## The cost floor, measured
 
 Established 2026-08-18 from the validated cost model, reading **no returns**
@@ -1937,12 +2015,13 @@ separates them.
 ---
 
 *Every hypothesis in this file was registered before the data to test it
-existed. **Four** trials have since been run and are recorded in the trial
-register — **#1 H4**, **#2 H2**, **#3 H1** all rejected, and **#6** a suggestive
-negative on the size question — and the price archive runs 2015-2026. Trials
-**#4 and #5 were never spent**: the Nifty 200 universe would not reconstruct.
-No result has been observed for **H3, H5 or H6**. The declared holdout,
-2022-01-01 to 2025-12-31, remains **untouched**.*
+existed. **Five** trials have since been run and are recorded in the trial
+register — **#1 H4**, **#2 H2**, **#3 H1** all rejected, **#6** a suggestive
+negative on the size question, and **#7** not supported on the signal question —
+and the price archive runs 2015-2026. Trials **#4 and #5 were never spent**: the
+Nifty 200 universe would not reconstruct. No result has been observed for **H3,
+H5 or H6**. The declared holdout, 2022-01-01 to 2025-12-31, remains
+**untouched**.*
 
 *Three rejections is not a failure of the project. It is the project working:
 each was rejected against criteria fixed before the data existed, and none

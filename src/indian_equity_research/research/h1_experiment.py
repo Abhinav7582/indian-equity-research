@@ -43,7 +43,7 @@ kept falling after its last print, which is the safe direction for H1's claim.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from itertools import pairwise
@@ -55,9 +55,13 @@ from indian_equity_research.market.membership import MembershipHistory, members_
 from indian_equity_research.research.momentum import (
     FORMATION_SESSIONS,
     SKIP_SESSIONS,
+    MomentumRanking,
     rank_by_momentum,
 )
 from indian_equity_research.research.rank_stats import RankStatsError, deciles, spearman
+
+#: A signal: a pinned view plus point-in-time membership, in; a ranking, out.
+Ranker = Callable[[PriceView, Iterable[str]], MomentumRanking]
 
 __all__ = [
     "DECILES",
@@ -65,6 +69,7 @@ __all__ = [
     "SUB_PERIODS",
     "H1Config",
     "H1Result",
+    "Ranker",
     "RebalanceObservation",
     "run_h1",
 ]
@@ -180,6 +185,7 @@ def run_h1(
     rebalances: Sequence[date],
     *,
     config: H1Config | None = None,
+    ranker: Ranker = rank_by_momentum,
 ) -> H1Result:
     """Measure cross-sectional momentum structure over the development window.
 
@@ -191,6 +197,12 @@ def run_h1(
         rebalances: Decision dates, ascending. The last one has no forward
             interval and is dropped.
         config: The registered specification.
+        ranker: The signal. Defaults to 12-1 momentum, which is what H1 was
+            registered on. Amendment A12 injects NSE's risk-adjusted score
+            here, so the two are measured by **identical** code from the
+            ranking onward -- universe, forward returns, excess, IC and
+            t-statistic are the same lines for both, and any difference in the
+            result is a difference in the signal rather than in the harness.
 
     Returns:
         The result, with every figure a rejection criterion needs.
@@ -221,7 +233,7 @@ def run_h1(
         benchmark = end_level / start_level - 1.0
 
         view = PriceView(bars, ordered, decision)
-        ranking = rank_by_momentum(view, members_on(history, decision))
+        ranking = ranker(view, members_on(history, decision))
 
         scored: list[tuple[str, float]] = []
         forward: dict[str, float] = {}

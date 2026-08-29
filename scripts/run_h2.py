@@ -36,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from indian_equity_research.backtest.engine import Bar
 from indian_equity_research.backtest.prices import build_bars
 from indian_equity_research.market.reconstruction import (
     NIFTY_100,
@@ -196,7 +197,7 @@ def main() -> int:
     print(f"  {history_bars.describe()}")
 
     # Bars are keyed by traded ticker; the strategy asks by canonical symbol.
-    merged: dict[str, dict[date, object]] = {}
+    merged: dict[str, dict[date, Bar]] = {}
     for ticker, series in history_bars.bars.items():
         merged.setdefault(universe.canonical.get(ticker, ticker), {}).update(series)
 
@@ -205,7 +206,7 @@ def main() -> int:
     print(f"  {len(tri)} index levels\n")
 
     result = run_h2(
-        merged,  # type: ignore[arg-type]
+        merged,
         history_bars.sessions,
         universe.history,
         tri,

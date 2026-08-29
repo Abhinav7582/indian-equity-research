@@ -48,6 +48,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from indian_equity_research.backtest.engine import Bar
 from indian_equity_research.backtest.prices import build_bars
 from indian_equity_research.market.identity import canonical_symbols
 from indian_equity_research.market.membership import MembershipHistory
@@ -84,13 +85,13 @@ def measure(
     built = build_bars(symbols=tickers, start=cfg.start, end=cfg.end)
     print(f"    {built.describe()}")
 
-    merged: dict[str, dict[date, object]] = {}
+    merged: dict[str, dict[date, Bar]] = {}
     for ticker, series in built.bars.items():
         merged.setdefault(canonical.get(ticker, ticker), {}).update(series)
 
     sessions = sorted(built.sessions)
     return run_h1(
-        merged,  # type: ignore[arg-type]
+        merged,
         sessions,
         history,
         load_tri(TRI),

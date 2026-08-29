@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from indian_equity_research.backtest.engine import Bar
 from indian_equity_research.backtest.prices import build_bars
 from indian_equity_research.market.reconstruction import (
     NIFTY_100,
@@ -144,7 +145,7 @@ def main() -> int:
     built = build_bars(symbols=universe.tickers, start=cfg.start, end=cfg.end)
     print(f"  {built.describe()}")
 
-    merged: dict[str, dict[date, object]] = {}
+    merged: dict[str, dict[date, Bar]] = {}
     for ticker, series in built.bars.items():
         merged.setdefault(universe.canonical.get(ticker, ticker), {}).update(series)
 
@@ -153,7 +154,7 @@ def main() -> int:
     print(f"loading the {spec.name} TRI...\n")
 
     result = run_h1(
-        merged,  # type: ignore[arg-type]
+        merged,
         sessions,
         universe.history,
         load_tri(tri_dir),
