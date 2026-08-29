@@ -22,12 +22,12 @@ governing document for anything evidential — this file may not weaken it.
 | 3e | Self-deception suite, mutation-tested | **Done** |
 | 3f | Statistical gates (DSR, PBO) | **Done** |
 | 3g | Purged / embargoed walk-forward CV | **Done** |
-| 4 | Hypothesis testing on the real universe | **H2 and H1 both REJECTED on the Nifty 100** (trials #2 and #3, 2026-08-23). H2: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI; the signal lost **3.32% before any cost**, so costs were not the cause. H1 then explained why — mean rank IC **+0.0378** with **t = 1.47** (needs 3.0), spread positive in **2 of 5** sub-periods, and **decile 10 returned −0.138%/month** against D9's +0.403%. The effect is weak, unstable, and absent from the top decile a small book must hold. Holdout untouched. **Nifty 200 extension declared by Amendment A10**, blocked on two datasets (see below); the code now takes the index as an argument and the Nifty 100 result reproduces identically through it. H3, H5, H6 untested |
+| 4 | Hypothesis testing on the real universe | **H2 and H1 both REJECTED on the Nifty 100** (trials #2 and #3, 2026-08-23). H2: net CAGR **10.85%** vs **17.13%** for the Nifty 100 TRI; the signal lost **3.32% before any cost**, so costs were not the cause. H1 then explained why — mean rank IC **+0.0378** with **t = 1.47** (needs 3.0), spread positive in **2 of 5** sub-periods, and **decile 10 returned −0.138%/month** against D9's +0.403%. The effect is weak, unstable, and absent from the top decile a small book must hold. Holdout untouched. **Nifty 200 extension attempted and BLOCKED ON DATA QUALITY** (A10 outcome, 2026-08-29) — both datasets arrived and are sound, but the universe will not reconstruct: 13 unapplied changes parsing Nifty 200 sections, 14 building it as `Nifty 100 ∪ Nifty Midcap 100`. Cause is an incomplete press-release archive (18 releases held for 2015 against 165 for 2025). Trials #4 and #5 not spent. H3, H5, H6 untested |
 | 5 | Allocation system | Not started |
 | 6 | Unexplored instruments research | Not started |
 | 7 | Paper trading, then the A6 decision | Not started |
 
-**883 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
+**887 tests · ruff clean · mypy strict clean · 12/12 mutation bugs caught.**
 
 ---
 
@@ -315,62 +315,44 @@ Governed entirely by **Amendment A6**:
 
 ---
 
-## Blocked: the Nifty 200 extension (Amendment A10)
+## The Nifty 200 extension — attempted, blocked on data quality
 
-The design is fixed and the code takes the index as an argument
-(`--index "Nifty 200"`). Two datasets are missing and nothing can run until
-both are on disk. **Download them before the next session.**
+**Both datasets arrived and both are sound.** TRI: 5,626 levels 2004-2026, no
+gaps over the test window, every session the Nifty 100 TRI has. Roster: 200
+constituents as at 2026-08-29.
 
-### 1. Nifty 200 constituent roster
+**The universe will not reconstruct.** Two independent approaches, both refused
+by the gate Amendment A10 set:
 
-The reconstruction rolls today's roster backwards through the published
-changes, so it needs a starting point.
+| Approach | Result |
+|---|---|
+| Parse `Nifty 200` sections | 51 changes, **13 unapplied**, 9 inside the test window, size drifts 200 → 208 |
+| `Nifty 100 ∪ Nifty Midcap 100` | **14 unapplied**, 31 of 38 snapshots off 200 (187–205) |
 
-- `https://nsearchives.nseindia.com/content/indices/ind_nifty200list.csv`
-- Save as
-  `data/raw/archive/nse_nifty200_constituents/nse_nifty200_constituents_YYYY-MM-DD.csv`
-- **The date in the filename is load-bearing.** It decides which
-  reconstitutions are already reflected in the roster. The 2026-09-30
-  reconstitution is already published; dating the file wrongly would undo a
-  change that has not happened yet, and `load_roster` refuses a filename it
-  cannot read a date from.
+The definitional identity was verified exact on the real rosters — no Nifty 100
+name outside the Nifty 200, remainder exactly 100 — so the union is the right
+construction. It still fails, and every failure is in the mid-cap half.
 
-### 2. Nifty 200 Total Return Index, 2015–2026
-
-- **https://www.niftyindices.com/reports/historical-data**
-- Index Type **Equity** → **Total returns Index Values**
-- Sub-Index **Broad Market Indices** → Index **NIFTY 200**
-- One year per download if the site caps the range
-- Save to `data/raw/indices/nifty200_tri/nifty200_tri_YYYY.csv`
-
-Header should read `"IndexName","Date","Total Returns Index"`.
-
-**Not a substitute:** the archive already holds `nifty200_momentum30` and a
-75:25 blend. Benchmarking a momentum strategy against a momentum index answers
-a different question and would flatter or damn it for the wrong reason.
-
-### Already verified without the data
-
-The press releases parse. **Forty-eight** substantive Nifty 200 changes come out
-of the existing circular archive, 2013–2026, and forty-four have a net size
-change of exactly zero as a fixed-size index requires. Four do not:
+**Cause: the press-release archive is thin in its early years.**
 
 ```
-2016-04-01  ind_prs22022016_2.pdf   net +2   unexplained
-2020-06-26  ind_prs10062020.pdf     net -5   unexplained
-2023-09-29  ind_prs17082023.pdf     net +1   TATAMTRDVR in
-2024-08-30  ind_prs23082024_1.pdf   net -1   TATAMTRDVR out
+releases held per year
+  2015   18      2018   68      2021   47      2024   93
+  2016   15      2019   84      2022   42      2025  165
+  2017   30      2020   61      2023   41      2026   82 (to Aug)
 ```
 
-The last two are the Tata Motors DVR pair already understood from the Nifty 100
-reconstruction. The first two are not yet explained, and A10 makes the run
-conditional on `roll_back` reporting zero unapplied changes — the same standard
-the Nifty 100 had to meet.
+Eight months between 2015 and 2017 have zero releases on disk. The failures
+cluster there. The Nifty 100 survived the same gaps because it turns over about
+two names per review; a 200-name universe carries several times that churn plus
+intra-review maintenance changes, which is exactly what is missing.
 
-### Then
+**To unblock:** backfill 2015–2017 from `niftyindices.com/media` (likely fixes
+about half — the 2018+ failures have a second, undiagnosed cause), or obtain a
+licensed historical constituent series. Lowering the standard is not an option
+under A10 or A5.
 
-```bash
-uv run python scripts/build_membership.py --index "Nifty 200"   # must come out clean
-uv run python scripts/run_h1.py --index "Nifty 200"             # trial #4
-uv run python scripts/run_h2.py --index "Nifty 200" --holdings 20   # trial #5
-```
+The union machinery (`reconstruct_union`, `NIFTY_MIDCAP_100`) is kept and
+tested. It is blocked on inputs, not logic — and its self-check worked exactly
+as designed, catching the drift rather than serving a universe that looked fine
+and was wrong.

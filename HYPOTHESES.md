@@ -1129,6 +1129,82 @@ outcome and the new one is logged beneath it.
 
 ---
 
+## A10 OUTCOME — BLOCKED ON DATA QUALITY, 2026-08-29
+
+**Trials #4 and #5 were not run.** The Nifty 200 universe could not be
+reconstructed to the standard the Nifty 100 met, and A10 made the run
+conditional on exactly that. No trial budget was spent; the register stays at
+three.
+
+### What was attempted
+
+Both datasets arrived and both are sound. The Nifty 200 TRI covers 2004-2026,
+5,626 levels, no gaps over the test window, and every session the Nifty 100 TRI
+has. The roster is 200 constituents as at 2026-08-29.
+
+**Attempt 1 — parse the "Nifty 200" sections directly.** 51 changes parsed,
+**13 could not be applied**, nine of them inside the 2016-2021 test window, and
+the constituent count drifted from 200 to 208.
+
+**Attempt 2 — build it as NSE does, `Nifty 100 ∪ Nifty Midcap 100`.** The
+definitional identity was verified exact on the real rosters: no Nifty 100 name
+sits outside the Nifty 200, and the remainder is exactly 100 names. The union
+also self-checks, since it must total 200 on every date.
+
+It failed too: **14 unapplied changes and 31 of 38 snapshots off 200**, ranging
+from 187 to 205. The Nifty 100 half reconstructs perfectly; every failure is in
+the mid-cap half.
+
+### The actual cause
+
+Not the parser, and not the union. **The press-release archive is incomplete in
+its early years.**
+
+```
+releases held, per year
+  2015   18        2019   84        2023   41
+  2016   15        2020   61        2024   93
+  2017   30        2021   47        2025  165
+  2018   68        2022   42        2026   82 (to August)
+```
+
+NSE did not publish ten times more index releases in 2025 than in 2015. Eight
+months between 2015 and 2017 have **zero** releases on disk. The failures
+cluster there — 2015-03-27, 2015-09-28 twice, 2015-10-19, 2016-09-30,
+2017-09-29 — with the remainder scattered later.
+
+**Why the Nifty 100 survived the same gaps.** It turns over roughly two names
+per semi-annual review, and the reviews that matter were captured. A 200-name
+universe carries several times that churn plus intra-review maintenance
+changes, and those are precisely what the thin years are missing. The Nifty 100
+reconstruction was not more robust; it was less demanding of the archive.
+
+### What this does and does not mean
+
+It does **not** mean momentum is absent in mid-caps. That question is untested
+and remains open.
+
+It does mean **this archive cannot answer it honestly**, and that the Nifty 100
+is currently the only universe this project can reconstruct to its own standard.
+
+### What would unblock it
+
+1. **Backfill the 2015-2017 press releases** from `niftyindices.com/media`.
+   Likely fixes roughly half the failures; the 2018+ ones have another cause
+   not yet diagnosed.
+2. **A licensed historical constituent series**, which removes the
+   reconstruction problem entirely rather than patching it.
+3. Nothing else. Lowering the standard is forbidden by this amendment and by
+   the reasoning in Amendment A5: a universe that does not close is not a
+   universe, and a result from one is not evidence.
+
+**The code is kept.** `reconstruct_union` and the `Nifty Midcap 100` spec are
+correct and tested; they are blocked on inputs, not on logic. The union's
+self-check worked exactly as designed — it detected the drift immediately
+instead of serving a plausible-looking universe that was quietly wrong.
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,

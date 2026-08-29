@@ -40,19 +40,29 @@ from indian_equity_research.market.index_changes import (
     parse_release,
     read_release_pdf,
 )
-from indian_equity_research.market.membership import MembershipHistory, roll_back
+from indian_equity_research.market.membership import (
+    MembershipHistory,
+    MembershipSnapshot,
+    SizeDeviation,
+    members_on,
+    roll_back,
+)
 
 __all__ = [
     "CASH_EQUITY_SERIES",
     "NIFTY_100",
     "NIFTY_200",
+    "NIFTY_200_UNION",
+    "NIFTY_MIDCAP_100",
     "IndexSpec",
     "Reconstruction",
     "ReconstructionError",
+    "UnionIndexSpec",
     "index_changes_for",
     "isins_by_symbol",
     "load_roster",
     "reconstruct",
+    "reconstruct_union",
 ]
 
 # Duplicated deliberately rather than imported from ``backtest.prices``:
@@ -259,6 +269,7 @@ def reconstruct(
     stop_at: date,
     circulars: Path | None = None,
     bhavcopy: Path | None = None,
+    canonical: dict[str, str] | None = None,
 ) -> Reconstruction:
     """Build the point-in-time universe for one index.
 
@@ -268,6 +279,12 @@ def reconstruct(
             undone. Usually the first date in the price archive.
         circulars: Press-release folder.
         bhavcopy: Price archive, for symbol identity.
+        canonical: A precomputed identity map. Building one reads the entire
+            bhavcopy archive and takes a minute, so :func:`reconstruct_union`
+            builds it once and shares it. Sharing is not merely faster: two
+            halves of a union resolved through *different* identity maps could
+            disagree about whether a renamed company is one security or two,
+            and the union would then double-count it.
 
     Returns:
         The reconstruction. **Check ``history.unapplied`` before using it** — a
@@ -284,20 +301,153 @@ def reconstruct(
             f"changes would be today's constituents held fixed, which is "
             f"survivorship bias in its purest form."
         )
-    canonical = canonical_symbols(isins_by_symbol(bhavcopy=bhavcopy))
+    resolved = (
+        canonical
+        if canonical is not None
+        else canonical_symbols(isins_by_symbol(bhavcopy=bhavcopy))
+    )
     history = roll_back(
         roster,
         as_at,
         changes,
-        canonical=canonical,
+        canonical=resolved,
         stop_at=stop_at,
         declared_size=spec.declared_size,
     )
     return Reconstruction(
         spec=spec,
         history=history,
-        canonical=canonical,
+        canonical=resolved,
         changes_parsed=parsed,
         changes_hand_read=hand,
         releases_without_text=0,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class UnionIndexSpec:
+    """An index defined as the union of two others.
+
+    NSE builds the Nifty 200 from the Nifty 100 and the Nifty Midcap 100, and
+    reconstructing it that way is not a convenience -- it is more faithful to
+    how the index actually changes.
+
+    **Why the union is more complete than the Nifty 200's own sections.** When a
+    company migrates up from the Midcap 100 into the Nifty 100, Nifty 200
+    membership does not change. There is nothing for a "Nifty 200" section to
+    say, so the releases often say nothing, while the two sub-index sections
+    each record their half. Parsing Nifty 200 sections alone therefore sees an
+    incomplete shadow of the churn: the 2015-2026 archive yields 13 changes that
+    cannot be reconciled against the published roster, and a constituent count
+    that drifts from 200 to 208. Reconstructed as a union, a migration is
+    automatically a no-op.
+
+    **And the union checks itself.** ``|Nifty 100 union Nifty Midcap 100|`` must
+    equal 200 on every date. Neither half can drift without the total saying so,
+    which is a guard the single-index reconstruction has no equivalent of.
+    """
+
+    name: str
+    parts: tuple[IndexSpec, ...]
+    declared_size: int
+
+    def describe(self) -> str:
+        """One line for a report header."""
+        joined = " + ".join(part.name for part in self.parts)
+        return f"{self.name} ({self.declared_size} constituents, as {joined})"
+
+
+NIFTY_MIDCAP_100: Final = IndexSpec(
+    name="Nifty Midcap 100",
+    roster_dir=Path("data/raw/archive/nse_niftymidcap100_constituents"),
+    declared_size=100,
+)
+
+#: The Nifty 200, built the way NSE builds it. Amendment A10.
+NIFTY_200_UNION: Final = UnionIndexSpec(
+    name="Nifty 200",
+    parts=(NIFTY_100, NIFTY_MIDCAP_100),
+    declared_size=200,
+)
+
+
+def reconstruct_union(
+    spec: UnionIndexSpec,
+    *,
+    stop_at: date,
+    circulars: Path | None = None,
+    bhavcopy: Path | None = None,
+) -> tuple[Reconstruction, tuple[Reconstruction, ...]]:
+    """Reconstruct each part and union them into one membership history.
+
+    The identity map is built **once** and shared by every part. Two halves
+    resolved through different maps could disagree about whether a renamed
+    company is one security or two, and the union would double-count it.
+
+    The union history begins at the **latest** of the parts' earliest snapshots.
+    Before that date at least one part cannot say who its members were, and a
+    union missing a part is not the index -- it is a smaller index wearing its
+    name.
+
+    Args:
+        spec: The composite index.
+        stop_at: Passed to each part.
+        circulars: Press-release folder.
+        bhavcopy: Price archive, for symbol identity.
+
+    Returns:
+        ``(union, parts)``. The union's ``unapplied`` carries every part's
+        unapplied change, so one check still decides whether to proceed.
+
+    Raises:
+        ReconstructionError: if ``spec`` has fewer than two parts.
+    """
+    if len(spec.parts) < 2:
+        raise ReconstructionError(f"{spec.name} needs at least two parts to union")
+
+    shared = canonical_symbols(isins_by_symbol(bhavcopy=bhavcopy))
+    parts = tuple(
+        reconstruct(part, stop_at=stop_at, circulars=circulars, bhavcopy=bhavcopy, canonical=shared)
+        for part in spec.parts
+    )
+
+    begins = max(p.history.snapshots[0].effective_from for p in parts)
+    moments = sorted(
+        {
+            snapshot.effective_from
+            for part in parts
+            for snapshot in part.history.snapshots
+            if snapshot.effective_from >= begins
+        }
+    )
+    snapshots = tuple(
+        MembershipSnapshot(
+            effective_from=when,
+            members=frozenset().union(*(members_on(part.history, when) for part in parts)),
+        )
+        for when in moments
+    )
+    deviations = tuple(
+        SizeDeviation(effective_from=s.effective_from, size=s.size)
+        for s in snapshots
+        if s.size != spec.declared_size
+    )
+    union = Reconstruction(
+        spec=IndexSpec(
+            name=spec.name,
+            roster_dir=spec.parts[0].roster_dir,
+            declared_size=spec.declared_size,
+        ),
+        history=MembershipHistory(
+            snapshots=snapshots,
+            unapplied=tuple(u for part in parts for u in part.history.unapplied),
+            size_deviations=deviations,
+            roster_date=max(p.history.roster_date for p in parts),
+            declared_size=spec.declared_size,
+        ),
+        canonical=shared,
+        changes_parsed=sum(p.changes_parsed for p in parts),
+        changes_hand_read=sum(p.changes_hand_read for p in parts),
+        releases_without_text=0,
+    )
+    return union, parts

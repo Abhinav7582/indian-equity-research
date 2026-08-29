@@ -17,8 +17,10 @@ from indian_equity_research.market import reconstruction
 from indian_equity_research.market.reconstruction import (
     NIFTY_100,
     NIFTY_200,
+    NIFTY_200_UNION,
     IndexSpec,
     ReconstructionError,
+    UnionIndexSpec,
     index_changes_for,
     load_roster,
 )
@@ -119,3 +121,44 @@ def test_an_index_name_is_matched_exactly(tmp_path: Path) -> None:
     empty.mkdir()
     changes, parsed, hand = index_changes_for("Nifty 200", circulars=empty)
     assert changes == [] and parsed == 0 and hand == 0
+
+
+# ---------------------------------------------------------------------------
+# The union reconstruction
+# ---------------------------------------------------------------------------
+
+
+def test_a_union_needs_at_least_two_parts() -> None:
+    spec = UnionIndexSpec(name="Solo", parts=(NIFTY_100,), declared_size=100)
+    with pytest.raises(ReconstructionError, match="at least two parts"):
+        reconstruction.reconstruct_union(spec, stop_at=dt.date(2015, 1, 1))
+
+
+def test_the_union_spec_names_its_parts() -> None:
+    """The description has to say how the index was built.
+
+    A Nifty 200 reconstructed as a union and one parsed from Nifty 200 sections
+    are different objects with different failure modes, and a report that calls
+    both "Nifty 200" hides which one produced a number.
+    """
+    described = NIFTY_200_UNION.describe()
+    assert "Nifty 100" in described
+    assert "Nifty Midcap 100" in described
+    assert NIFTY_200_UNION.declared_size == 200
+
+
+def test_the_union_sizes_add_up_to_the_declared_total() -> None:
+    """200 = 100 + 100, and the check that the union must total 200 depends on it."""
+    assert sum(part.declared_size for part in NIFTY_200_UNION.parts) == (
+        NIFTY_200_UNION.declared_size
+    )
+
+
+def test_the_parts_have_distinct_rosters() -> None:
+    """Two parts pointing at one roster would union a set with itself.
+
+    The result would be 100 members where 200 were declared, and the size
+    deviation report would be the only thing that noticed.
+    """
+    directories = {part.roster_dir for part in NIFTY_200_UNION.parts}
+    assert len(directories) == len(NIFTY_200_UNION.parts)
