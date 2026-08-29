@@ -49,11 +49,14 @@ from indian_equity_research.market.membership import (
 )
 
 __all__ = [
+    "A11_IMPLICATED",
     "CASH_EQUITY_SERIES",
+    "NIFTY_50",
     "NIFTY_100",
     "NIFTY_200",
     "NIFTY_200_UNION",
     "NIFTY_MIDCAP_100",
+    "NIFTY_NEXT_50",
     "IndexSpec",
     "Reconstruction",
     "ReconstructionError",
@@ -104,6 +107,50 @@ NIFTY_200: Final = IndexSpec(
     name="Nifty 200",
     roster_dir=Path("data/raw/archive/nse_nifty200_constituents"),
     declared_size=200,
+)
+
+# The two halves of the Nifty 100, and the cleanest-parsing indices in the whole
+# archive: 25 changes with 2 net-size anomalies for the Nifty 50, 35 with 1 for
+# the Next 50, against 51 with 4 for the Nifty 200. Amendment A11 uses them to
+# ask the size question the Nifty 200 could not be made to answer.
+NIFTY_50: Final = IndexSpec(
+    name="Nifty 50",
+    roster_dir=Path("data/raw/archive/nse_nifty50_constituents"),
+    declared_size=50,
+)
+NIFTY_NEXT_50: Final = IndexSpec(
+    name="Nifty Next 50",
+    roster_dir=Path("data/raw/archive/nse_niftynext50_constituents"),
+    declared_size=50,
+)
+
+# The twenty securities implicated by the thirteen Nifty 200 changes that cannot
+# be applied. Fixed by Amendment A11 **before any Nifty 200 return was read**, so
+# excluding them prejudges nothing. Band B of the A11 sensitivity drops these;
+# Band A keeps them. Widening this set until the bands agree is forbidden.
+A11_IMPLICATED: Final = frozenset(
+    {
+        "ABBOTINDIA",
+        "BAJAJFINSV",
+        "BBTC",
+        "CENTRALBK",
+        "CESC",
+        "CRISIL",
+        "GODREJAGRO",
+        "HINDCOPPER",
+        "IDEA",
+        "INDIANB",
+        "IREDA",
+        "MFSL",
+        "NATIONALUM",
+        "NIITTECH",
+        "RELCAPITAL",
+        "TATACOMM",
+        "TRENT",
+        "VAKRANGEE",
+        "VGUARD",
+        "WABAG",
+    }
 )
 
 

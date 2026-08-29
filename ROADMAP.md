@@ -347,10 +347,39 @@ cluster there. The Nifty 100 survived the same gaps because it turns over about
 two names per review; a 200-name universe carries several times that churn plus
 intra-review maintenance changes, which is exactly what is missing.
 
-**To unblock:** backfill 2015–2017 from `niftyindices.com/media` (likely fixes
-about half — the 2018+ failures have a second, undiagnosed cause), or obtain a
-licensed historical constituent series. Lowering the standard is not an option
-under A10 or A5.
+### Ruled out cheaply, recorded so they are not retried
+
+* **Starting the study later does not help.** Rolling back only to 2021 still
+  leaves 3 unapplied changes; to 2018, nine. The gaps are spread across the
+  whole period, not confined to the thin 2015–2017 years.
+* **Backfilling 2015–2017 releases is therefore necessary but not sufficient**,
+  and is not worth doing on its own.
+
+### Three routes declared by Amendment A11, none yet run
+
+| Route | Needs | Status |
+|---|---|---|
+| **1. Sensitivity band** — run the study twice, full reconstruction against one excluding the 20 implicated securities; disagreement on any criterion forces INCONCLUSIVE | nothing | code ready |
+| **2. Size tiers** — ask the size question on the Nifty 50 vs Nifty Next 50, the cleanest-parsing indices in the archive | 2 roster downloads | specs added, runner pending |
+| **3. Hand-adjudicate the 13 changes** — evidence-only, the method that fixed the Nifty 100's 2021 gap | your time | worklist written |
+
+Route 3 first if there is time: if it closes, Route 1 is unnecessary and the
+study runs with no caveat. Worklist in
+[`docs/nifty200_adjudication_worklist.md`](docs/nifty200_adjudication_worklist.md).
+
+### The two roster downloads Route 2 needs
+
+```
+https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv
+  -> data/raw/archive/nse_nifty50_constituents/nse_nifty50_constituents_YYYY-MM-DD.csv
+
+https://nsearchives.nseindia.com/content/indices/ind_niftynext50list.csv
+  -> data/raw/archive/nse_niftynext50_constituents/nse_niftynext50_constituents_YYYY-MM-DD.csv
+```
+
+Both are checkable against what we already hold: each must contain exactly 50
+names, and their union must equal the Nifty 100 roster exactly. Date the
+filenames with the day you download them.
 
 The union machinery (`reconstruct_union`, `NIFTY_MIDCAP_100`) is kept and
 tested. It is blocked on inputs, not logic — and its self-check worked exactly

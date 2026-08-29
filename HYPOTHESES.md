@@ -1205,6 +1205,151 @@ instead of serving a plausible-looking universe that was quietly wrong.
 
 ---
 
+# AMENDMENT A11 — three routes past the Nifty 200 blocker, declared in advance
+
+**Date: 2026-08-29** · **Written before any of the three has been run, and
+before the Nifty 50 roster has been downloaded.**
+
+## Why this exists
+
+A10 ended blocked: the Nifty 200 will not reconstruct, and the cause is an
+incomplete press-release archive rather than a bug. Three routes past it are
+declared here. **None may be run before this amendment is committed**, and the
+rules below are fixed now precisely because the tempting version of each is to
+decide what counts as success after seeing the answer.
+
+Cheap tests already ruled two ideas out, and they are recorded so nobody
+re-tries them:
+
+* **Starting the study later does not help.** Rolling back only to 2021 still
+  leaves 3 unapplied changes; to 2018, nine. The gaps are spread across the
+  period, not confined to the thin 2015-2017 years.
+* **Backfilling 2015-2017 releases is therefore necessary but not sufficient**,
+  and is not pursued on its own.
+
+---
+
+## Route 1 — a sensitivity band on the Nifty 200
+
+**The measured doubt.** Thirteen changes cannot be applied. They implicate
+exactly **twenty securities**, 5.3% of the 380 that were ever members, and the
+constituent count overshoots by at most 8 on 200 — 4%.
+
+```
+ABBOTINDIA  BAJAJFINSV  BBTC      CENTRALBK  CESC
+CRISIL      GODREJAGRO  HINDCOPPER IDEA      INDIANB
+IREDA       MFSL        NATIONALUM NIITTECH  RELCAPITAL
+TATACOMM    TRENT       VAKRANGEE  VGUARD    WABAG
+```
+
+That list is determined by the reconstruction alone. **No return was read to
+produce it**, so fixing it here costs nothing and prejudges nothing.
+
+**The design.** H1 and H2 are each run twice on the Nifty 200:
+
+* **Band A** — the full reconstruction, as it stands.
+* **Band B** — the same, with those twenty securities excluded for the entire
+  period.
+
+**The binding rule, fixed now.** If both bands reach the same verdict on every
+rejection criterion, that verdict stands and the reconstruction error is
+declared **not load-bearing**. If they differ on **any** criterion, the result
+is **INCONCLUSIVE** and neither band is reported as the answer.
+
+Choosing the more favourable band afterwards is forbidden. So is widening the
+excluded set until the bands agree.
+
+**Why this is not moving the goalposts.** A10's gate was about **data quality**,
+and **no Nifty 200 return has been observed**. Amending a method before any
+result exists cannot be fitting the rules to a result — which is the specific
+thing the gate protects against. Had a return been seen, this amendment would
+not be permissible.
+
+**Trial accounting.** Following Amendment A4's precedent for the delisting
+bands: **one trial per hypothesis**, reported as a band rather than as two
+selectable numbers. Trials **#4 (H1, Nifty 200)** and **#5 (H2, Nifty 200)**.
+
+---
+
+## Route 2 — size tiers, using the best-documented universes in the archive
+
+**The question the Nifty 200 was for** is whether momentum lives further down
+the size curve. That can be asked without the Nifty 200 at all.
+
+The Nifty 100 splits exactly into the **Nifty 50** and the **Nifty Next 50**,
+and those two are the cleanest-parsing indices in the entire archive:
+
+```
+Nifty 50        25 changes,  2 with non-zero net size
+Nifty Next 50   35 changes,  1
+Nifty 100       37 changes,  4      (reconstructs clean)
+Nifty 200       51 changes,  4      (does not)
+```
+
+**The design.** 12-1 momentum, monthly, gross, 2016-2021, identical to trial #3
+in every respect except the universe. Measured **within each tier separately**.
+
+**Rank IC is the primary metric, not deciles.** Fifty names give buckets of
+five, which is too thin for a decile mean to mean anything. The rank IC uses
+all fifty every month and is the same statistic H1 was registered on. Quintiles
+are reported alongside for shape, and are secondary.
+
+**The prediction, registered now:**
+
+> If momentum lives further down the size curve, the mean rank IC in the
+> **Nifty Next 50** will exceed that in the **Nifty 50**.
+
+**The criteria.** The comparison is informative only if the smaller tier's IC is
+both higher *and* itself distinguishable from zero: Next 50 IC > Nifty 50 IC,
+**and** Newey-West |t| ≥ 3.0 on the Next 50 IC. Failing the second while passing
+the first is a **suggestive negative**, recorded as such and not as support.
+
+**Trial accounting — one trial, #6**, with a binding rule: **neither tier's IC
+may be reported as a standalone finding.** The registered claim is the
+difference between them. Reporting the better tier alone would be selecting one
+of two measurements after seeing both, which is exactly what a single-trial
+count must not be allowed to conceal.
+
+**Data required and not yet held:** the Nifty 50 and Nifty Next 50 constituent
+rosters. Both are checkable against what we already have — their union must
+equal the Nifty 100 roster exactly, and each must hold 50 names.
+
+---
+
+## Route 3 — adjudicate the thirteen changes by hand
+
+The honest fix rather than a bound on the damage, and the method this project
+has already used successfully: the September 2021 Nifty 100 reconstitution was
+recovered exactly this way and is recorded in
+`data/reference/index_changes_manual.md`.
+
+Each of the thirteen is researched against NSE's record, and what actually
+happened to that security on that date — merger, delisting, suspension,
+migration between indices — is written down with its evidence.
+
+**This reads no returns and is not a trial.** It is a data-quality repair.
+
+**If it closes the reconstruction, Route 1 becomes unnecessary** and the Nifty
+200 study runs with no caveat at all. Route 1 exists because partial success is
+the likely outcome, not because the repair is optional.
+
+**A rule for the register, binding.** An entry may record only what a document
+says. "This name must have left around here because the count is wrong" is an
+inference from the reconstruction failing, and writing it down would make the
+reconstruction close by construction — it would be fitting the data to the
+method. Any change that cannot be evidenced stays unapplied and feeds Route 1's
+excluded list instead.
+
+---
+
+## What would make this amendment dishonest
+
+Running any route before this is committed. Reporting Band A or Band B
+selectively. Reporting one size tier alone. Adding names to the excluded list
+until the bands agree. Writing an unevidenced entry into the manual register.
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -1501,6 +1646,7 @@ separates them.
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
 | 2026-08-10 | all (deployment) | **Amendment A6** — fixed a ₹3,00,000 capital cap, a two-year abandonment test against Baseline B3, and six binding pre-conditions on any future derivatives work including a permanent ban on naked short options | Nothing in this file yet governed what happens *after* a result arrives, which is where retail capital is actually lost. The owner intends to explore F&O eventually; the conditions are cheapest to set honestly while still theoretical | Yes — no strategy result exists, no capital deployed, no derivatives work begun |
 | 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
+| 2026-08-29 | H1 and H2 (universe, method) | **Amendment A11** — declared three routes past A10's blocker. **Route 1:** run the Nifty 200 study as a two-band sensitivity, full reconstruction against one excluding the twenty implicated securities, with disagreement on any criterion forcing **INCONCLUSIVE** rather than a choice. **Route 2:** ask the size question directly on the Nifty 50 versus Nifty Next 50, the two cleanest-parsing indices in the archive, with rank IC primary and the prediction that the smaller tier scores higher registered in advance. **Route 3:** hand-adjudicate the thirteen unapplied changes, evidence-only. Trials #4, #5 (bands) and #6 (tiers) | A10 ended blocked on data quality with no Nifty 200 return observed, so amending the method now cannot be fitting rules to a result — the distinction the gate exists to protect. Two cheaper ideas were tested and ruled out first and are recorded so they are not retried: starting the study later leaves 3 unapplied changes even from 2021, and backfilling 2015-2017 releases is therefore necessary but not sufficient | Yes — no route run, Nifty 50 roster not yet downloaded, no Nifty 200 return ever observed |
 | 2026-08-23 | H1 and H2 (universe) | **Amendment A10** — declared the **Nifty 200** extension: one variable moves, the universe; signal, deciles, cadence, window, holdout and costs all unchanged. Breadth follows the decile (20 names, not 10) to keep A9's "H2 trades what H1 tests" principle intact, and clears A7 at 0.616–0.930%. Registered **in advance** the prediction that D8 and D9 will again exceed D10, so a replication counts as evidence and a non-replication says the Nifty 100 pattern was noise. H2 still trades D10, **not** D9. Two trials, #4 and #5 | H1 and H2 were rejected on the largest, most-arbitraged hundred names, which says nothing about the rest of the market; Indian momentum research concentrates in mid-caps and NSE's own momentum index draws from the Nifty 200. The tempting version — build the Nifty 200 test around whichever deciles worked on the Nifty 100 — is selection, so the design is fixed before the roster and TRI have even been downloaded | Yes — the two required datasets are not in the repository, so no Nifty 200 result could have been seen |
 | 2026-08-23 | H2 (portfolio specification) | **Amendment A9** — declared H2's unstated parameters: **10 holdings** (the top decile), equal weight, monthly on the first session, decided on the previous close and filled at the next open, 252-session minimum history, development window 2015–2021 with the 2022–2025 holdout untouched. Logged as **one** trial; no breadth sweep | H2 said "the highest-ranked momentum names" without saying how many, which changes the answer. Ten because H1's criteria are written about decile 10 — holding twenty would test a different portfolio and could not say whether H1's effect is tradeable — and because it is the cheapest breadth A7 permits (0.458%–0.616% per full turnover across every execution assumption). Both reasons read no returns | Yes — momentum signal not yet implemented, no stock-level backtest run |
 | 2026-08-23 | H2 (cost model) | **Amendment A8** — corrected the DP charging unit from "per sell scrip" to **per sell order**, verified against two Groww contract notes and reconciled to the paisa against the funds ledger. Set a standing rule that any cost parameter not checked against a real settled transaction is marked documented-only | The registered text stated Zerodha's rule, not the one this account is charged under. A security sold in two orders on one day is charged twice. The correction is weakly **stricter** for every possible execution and strictly stricter whenever an exit splits, so it can only make H2 harder to pass — which is the only direction a pre-registered document may be corrected in without the edit being indistinguishable from fitting the rules to a result | Yes — no hypothesis tested on stock-level data; the correction raises modelled costs |
