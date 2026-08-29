@@ -1350,6 +1350,125 @@ until the bands agree. Writing an unevidenced entry into the manual register.
 
 ---
 
+# AMENDMENT A12 — test the signal NSE actually uses
+
+**Date: 2026-08-29** · **Written before the signal was implemented and before
+any risk-adjusted result was computed.**
+
+## Why this exists
+
+Every trial so far has varied the universe, the breadth, the costs, the tiers
+and the window, and has held **one thing constant: raw 12-1 momentum**. Four
+trials, one signal.
+
+Scoring Baseline B3 revealed that the investable momentum product returned
+**25.10% a year** over exactly the window in which our momentum strategy
+returned 10.85%. Whatever went wrong, "momentum did not work in India in
+2016–2021" is not it.
+
+The most likely remaining explanation is that **we tested a different signal
+from the one that worked.**
+
+## What NSE actually does
+
+Verified against NSE's published methodology rather than recalled:
+
+* The score comes from **6-month and 12-month price returns, each divided by
+  volatility** — a momentum *ratio*, return over standard deviation.
+* The two ratios are normalised and combined into one score.
+* The top **30** of the **Nifty 200** are selected.
+* Weights are free-float market cap **multiplied by** the momentum score,
+  capped at the lower of 5% or 5× the free-float weight.
+* Rebalanced **semi-annually**, June and December.
+
+Our signal is none of that. It is a raw twelve-month return with one month
+skipped, no volatility adjustment, equal weights, ten names, monthly.
+
+## What is tested, and what is not
+
+**Tested:** NSE's *signal*, as published — 6-month and 12-month returns each
+divided by trailing volatility, cross-sectionally normalised and averaged.
+
+**Deviations, forced by data or by power, and declared here:**
+
+| | NSE | This test | Why |
+|---|---|---|---|
+| Universe | Nifty 200 | **Nifty 100** | The Nifty 200 does not reconstruct (A10 outcome) |
+| Cadence | semi-annual | **monthly** | 70 observations against ~12; and it matches trial #3 |
+| Weighting | free-float × score, capped | **not modelled** | This is an IC study, not a portfolio |
+| Skip month | none | **none** | Follows NSE, and differs from our 12-1 |
+
+**Not tested:** whether NSE's *portfolio* is reproducible. Weighting needs
+free-float market cap, which this project does not hold.
+
+**One consequence stated plainly.** Because the skip month goes as well as the
+volatility adjustment, a positive result attributes to **NSE's signal as a
+whole**, not to risk-adjustment specifically. Isolating the two components would
+be a further trial and is not claimed here.
+
+## A simplification, and why it is exact
+
+NSE converts the averaged z-score into a positive weighting score. **That
+transform is monotonic, and rank correlation is invariant to any monotonic
+transform**, so it cannot change the IC by even a rounding error. It is
+therefore omitted, and the omission costs nothing — it would matter only for
+weighting, which is not modelled.
+
+## The specification — binding
+
+| Parameter | Declared value |
+|---|---|
+| Universe | Point-in-time Nifty 100 |
+| Signal | mean of the cross-sectional z-scores of (6m return ÷ σ) and (12m return ÷ σ) |
+| σ | Annualised standard deviation of daily returns over the trailing 252 sessions |
+| Windows | 126 sessions (6m) and 252 sessions (12m), ending on the decision date |
+| Skip | **None**, following NSE |
+| Minimum history | 252 sessions |
+| Cadence | Monthly, first session |
+| Metric | Mean Spearman rank IC vs forward one-month excess return, Newey-West t |
+| Window | 2015–2021 development; **holdout untouched** |
+| Costs | **Gross** — this is H1's question, not H2's |
+
+Everything else is identical to trial #3.
+
+## The registered prediction
+
+> If the signal is the explanation for trials #2 and #3, the risk-adjusted score
+> will produce a mean rank IC **materially above the raw 12-1 figure of
+> +0.0378**.
+
+**Criteria, fixed now:**
+
+| | Required for support |
+|---|---|
+| Risk-adjusted IC > raw 12-1 IC (+0.0378) | necessary |
+| Newey-West \|t\| ≥ 3.0 on the risk-adjusted IC | necessary |
+
+Both, or it is not support. Higher-but-not-significant is a **suggestive
+positive** — the same standing A11 gave the mirror-image result in trial #6, and
+recorded as such rather than as encouragement.
+
+**And an honest limit.** Even full support would not explain the whole B3 gap.
+NSE's 25.10% comes from signal, universe, concentration and weighting together,
+and this test moves one of the four.
+
+## Trial accounting
+
+**One trial, #7.** Taking the register to five spent trials. This file already
+records the cost: at five trials the chance-expected best Sharpe is 1.19.
+
+If this fails, then across **two signals**, three universes and every cost
+treatment, the archive says there is nothing here that this account can reach —
+and Phase 5 is the answer rather than a consolation.
+
+## What would make this amendment dishonest
+
+Tuning the lookback windows, the volatility definition, or the combination
+weights after seeing an IC. Reporting a component (6m alone, 12m alone) that was
+not registered. Running it on the holdout.
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -1808,6 +1927,7 @@ separates them.
 | 2026-08-07 | all (data treatment) | **Amendment A4** — declared the three-way delisting classification, its thresholds, and the two-band reporting rule | 1,092 delistings observed in the Phase 2 dataset showed no bimodal split; only the tails are separable | Yes — no strategy backtested on stock-level data (`0174cfd`) |
 | 2026-08-10 | all (deployment) | **Amendment A6** — fixed a ₹3,00,000 capital cap, a two-year abandonment test against Baseline B3, and six binding pre-conditions on any future derivatives work including a permanent ban on naked short options | Nothing in this file yet governed what happens *after* a result arrives, which is where retail capital is actually lost. The owner intends to explore F&O eventually; the conditions are cheapest to set honestly while still theoretical | Yes — no strategy result exists, no capital deployed, no derivatives work begun |
 | 2026-08-10 | all (universe) | **Amendment A5** — declared a liquidity-ranked proxy universe as engine scaffolding, with a binding guard that no result from it may enter the trial register or bear on any hypothesis | Phase 3 needs a universe; real Nifty 100 membership requires ~30–40 uncollected NSE circulars. Declaring the proxy's zero evidentiary status *before* it produces any number removes the incentive to let a convenient result stand | Yes — proxy not yet implemented, no engine exists, no stock-level backtest run |
+| 2026-08-29 | H1/H2 (signal) | **Amendment A12** — test **NSE's own momentum signal**: 6-month and 12-month returns each divided by trailing volatility, cross-sectionally normalised and averaged, no skip month. Nifty 100, monthly, gross, everything else identical to trial #3. Registered prediction: the risk-adjusted IC exceeds the raw 12-1 figure of +0.0378, **and** its own \|t\| ≥ 3.0. Both, or it is a suggestive positive rather than support. Trial #7 | Four trials varied universe, breadth, costs, tiers and window while holding **one signal constant**. Baseline B3, scored at last, returned 25.10%/yr over exactly the window our strategy returned 10.85% — so "momentum did not work" is not the explanation, and the likeliest remaining one is that we tested a different signal from the one that worked. Methodology verified against NSE's published document rather than recalled | Yes — signal not implemented, no risk-adjusted result computed |
 | 2026-08-29 | H1 and H2 (universe, method) | **Amendment A11** — declared three routes past A10's blocker. **Route 1:** run the Nifty 200 study as a two-band sensitivity, full reconstruction against one excluding the twenty implicated securities, with disagreement on any criterion forcing **INCONCLUSIVE** rather than a choice. **Route 2:** ask the size question directly on the Nifty 50 versus Nifty Next 50, the two cleanest-parsing indices in the archive, with rank IC primary and the prediction that the smaller tier scores higher registered in advance. **Route 3:** hand-adjudicate the thirteen unapplied changes, evidence-only. Trials #4, #5 (bands) and #6 (tiers) | A10 ended blocked on data quality with no Nifty 200 return observed, so amending the method now cannot be fitting rules to a result — the distinction the gate exists to protect. Two cheaper ideas were tested and ruled out first and are recorded so they are not retried: starting the study later leaves 3 unapplied changes even from 2021, and backfilling 2015-2017 releases is therefore necessary but not sufficient | Yes — no route run, Nifty 50 roster not yet downloaded, no Nifty 200 return ever observed |
 | 2026-08-23 | H1 and H2 (universe) | **Amendment A10** — declared the **Nifty 200** extension: one variable moves, the universe; signal, deciles, cadence, window, holdout and costs all unchanged. Breadth follows the decile (20 names, not 10) to keep A9's "H2 trades what H1 tests" principle intact, and clears A7 at 0.616–0.930%. Registered **in advance** the prediction that D8 and D9 will again exceed D10, so a replication counts as evidence and a non-replication says the Nifty 100 pattern was noise. H2 still trades D10, **not** D9. Two trials, #4 and #5 | H1 and H2 were rejected on the largest, most-arbitraged hundred names, which says nothing about the rest of the market; Indian momentum research concentrates in mid-caps and NSE's own momentum index draws from the Nifty 200. The tempting version — build the Nifty 200 test around whichever deciles worked on the Nifty 100 — is selection, so the design is fixed before the roster and TRI have even been downloaded | Yes — the two required datasets are not in the repository, so no Nifty 200 result could have been seen |
 | 2026-08-23 | H2 (portfolio specification) | **Amendment A9** — declared H2's unstated parameters: **10 holdings** (the top decile), equal weight, monthly on the first session, decided on the previous close and filled at the next open, 252-session minimum history, development window 2015–2021 with the 2022–2025 holdout untouched. Logged as **one** trial; no breadth sweep | H2 said "the highest-ranked momentum names" without saying how many, which changes the answer. Ten because H1's criteria are written about decile 10 — holding twenty would test a different portfolio and could not say whether H1's effect is tradeable — and because it is the cheapest breadth A7 permits (0.458%–0.616% per full turnover across every execution assumption). Both reasons read no returns | Yes — momentum signal not yet implemented, no stock-level backtest run |
