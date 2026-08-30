@@ -1480,6 +1480,104 @@ not registered. Running it on the holdout.
 
 ---
 
+# AMENDMENT A13 — belief checking, and why it is not hypothesis testing
+
+**Date: 2026-08-30** · **Written before the checker was implemented.** A
+preliminary calculation on the mid- and small-cap series had been run by hand
+before this was drafted; §*What has already been seen* below states exactly
+what, so that nothing here can be mistaken for a prediction made blind.
+
+## Why this exists
+
+Phase 4 asked one question and answered it: no strategy passed, nothing was
+deployed. Phase 5 addresses the balance sheet, where **one percentage point is
+₹65,403 a year against ₹15,000 from the research capital**.
+
+But the balance sheet is not tested the way a strategy is tested. There is no
+backtest, no holdout, no Deflated Sharpe. What there is instead is a stream of
+**claims about market state** — "small caps have been beating my portfolio",
+"the market is at one of its lowest points" — each of which arrives attached to
+a decision. The second of those was checked and came back at the **97th
+percentile of 23 years**. It was about to inform a real allocation.
+
+So belief checking needs its own rules. Borrowing Phase 4's would be wrong in
+both directions: it would spend trial-register slots on questions that select
+nothing, and it would grant a descriptive statistic the authority of a
+pre-registered test.
+
+## What belief checking is
+
+**Describing a distribution and locating a point in it.** Given a claim of the
+form *"X has outperformed Y over horizon H"*, the checker reports every
+historical instance of that comparison and says where the present one sits.
+
+It answers *"is this unusual?"* It does not answer *"will it continue?"*, and
+nothing in its output may be read as though it did.
+
+## The binding rules
+
+**1. It describes. It never recommends.** No output may contain an allocation,
+a weight, a target, a rupee amount to move, or a directional statement about
+what should be done. This is the same boundary the rest of the project holds:
+the system does not recommend securities or deploy capital, and a percentile is
+not an exception to that merely because it is a number about an index rather
+than a stock.
+
+**2. It does not spend trials.** Belief checks select nothing, fit nothing, and
+produce no strategy, so they cannot inflate a Deflated Sharpe denominator that
+exists to count selection. **A check that is used to choose an allocation
+becomes a decision, not a description** — and the decision is the owner's, made
+outside this system.
+
+**3. An encouraging result requires a second window.** Any result that appears
+to favour acting must be re-confirmed on a **non-overlapping** window before it
+may inform a decision. Overlapping rolling windows share data — 5,060 daily
+1-year windows over 21 years contain roughly 21 independent observations, not
+5,060 — and a run concentrated in recent months will dominate every window that
+contains it. The second window is what separates a durable pattern from a
+recent one.
+
+**4. Every check is logged, including the ones that came back unhelpful.**
+`docs/beliefs_log.md` records the claim, the date, the series, the window and
+the outcome. This exists because a belief that failed a check is otherwise free
+to resurface six months later as a fresh idea, and neither party would notice.
+The log is the memory that prevents that.
+
+**5. The comparator must span the window.** A check whose comparator series is
+shorter than the period requested must **refuse**, not silently truncate. A
+21-year claim answered from 11 years of comparator data, reported as though it
+were 21, is the same class of defect as the ten found in Phase 4.
+
+## What has already been seen
+
+Stated plainly, because it bounds what any later result can claim:
+
+* The Midcap 150 and Smallcap 250 TRI files were verified — 5,311 rows each,
+  2005-04-01 to 2026-08-28, zero defects.
+* A **scratch calculation**, not a committed script, produced trailing returns,
+  rolling 1-year relative returns against the **Nifty 200 TRI**, hit rates,
+  conditional win/loss magnitudes, drawdowns and today's percentile.
+* The statistics computed were those listed in advance, before the files
+  existed: rolling relative returns, hit rate, conditional magnitudes, drawdown
+  and recovery, and today's percentile. **No statistic was chosen after seeing
+  a result**, and none has been added since.
+
+**The known deficiency in that calculation:** the Nifty 100 TRI archive spans
+only 2015-01-01 to 2026-08-11, so the comparator used was the Nifty 200 TRI,
+**which contains the mid-caps being measured**. That understates the true
+large-versus-mid gap. Rule 5 above exists so the committed version refuses this
+rather than repeating it.
+
+## What would make this amendment dishonest
+
+Re-running a check with a different comparator, horizon or start date because
+the first answer was unwelcome, and reporting only the second. Adding a
+statistic after seeing the distribution. Presenting a percentile as a forecast.
+Allowing an output to name a weight. Treating the checker's silence on
+*"will it continue?"* as though it were a yes.
+
+---
+
 ## Trial register
 
 Every backtest configuration executed against project data is recorded here,
@@ -2010,6 +2108,7 @@ separates them.
 
 | Date | Hypothesis | Change | Reason | Made before testing? |
 |---|---|---|---|---|
+| 2026-08-30 | none (Phase 5 method) | **Amendment A13** — declared **belief checking** as an activity distinct from hypothesis testing, with five binding rules: it describes and never recommends; it spends **no trial-register slots**, since it selects nothing; an encouraging result must be re-confirmed on a **non-overlapping second window** before it may inform a decision; every check is logged in `docs/beliefs_log.md` including unhelpful ones; and a check whose comparator does not span the requested window must **refuse** rather than truncate | Phase 5 governs ₹65.4 lakh, where one percentage point is ₹65,403 a year, but it has no backtest, no holdout and no Deflated Sharpe to borrow. What it has is a stream of claims about market state arriving attached to decisions — one of which, "the market is at one of its lowest points", checked out at the **97th percentile of 23 years**. Borrowing Phase 4's rules would be wrong in both directions: spending trials on questions that select nothing, and lending a descriptive statistic the authority of a registered test | Partly — the Midcap 150 and Smallcap 250 files were verified and a **scratch** calculation run before drafting. §*What has already been seen* states exactly what, and records that every statistic had been listed in advance, before the files existed |
 | 2026-08-04 | — | Initial registration of H1–H6 | Phase 1 foundation | Yes — no data existed |
 | 2026-08-04 | H2 (and H3/H4/H6 by reference) | **Amendment A1** — added Baseline B3 (Nifty200 Momentum 30, net of 0.22% and LTCG) as a mandatory blocking baseline | The primary signal is already an investable product; the original benchmark was insufficient | Yes — no data ingested, nothing tested |
 | 2026-08-04 | H4 | **Amendment A2** — declared the regime definition, data sources, evaluation windows, cost model and pass/fail criteria | H4 was registered with its definition DEFERRED; it must be fixed before testing | Yes — no price series downloaded, nothing plotted |

@@ -250,10 +250,29 @@ Four components:
 3. **Pre-trade calculator.** Cost, tax, holding-period and exit-window
    consequences of a decision **before** it is made. The cost model already does
    this to the paisa; it needs a front door.
-4. **Belief checker.** Any claim about market state tested against the archive
-   before it is acted on. Built because a confident belief that the market was
-   "at one of its lowest points" turned out to be the **97th percentile** of 23
-   years — off by roughly 90 percentiles, and about to inform real decisions.
+4. **Belief checker — BUILT, 2026-08-30.** Any claim about market state tested
+   against the archive before it is acted on. Built because a confident belief
+   that the market was "at one of its lowest points" turned out to be the
+   **97th percentile** of 23 years — off by roughly 90 percentiles, and about
+   to inform real decisions.
+
+   Governed by **Amendment A13**: it describes and never recommends, it spends
+   no trial-register slots, an encouraging result needs a non-overlapping second
+   window before it may inform a decision, every check is logged in
+   `docs/beliefs_log.md`, and a comparator that does not span the window makes
+   the check **refuse** rather than quietly answer a shorter question.
+
+   `src/indian_equity_research/research/beliefs.py` ·
+   `scripts/check_belief.py` · `docs/beliefs_log.md`
+
+   **First check, B1** — mid- and small-caps against the archive, 2005–2026 —
+   found the original comparison was an index against a *blended* portfolio, so
+   the real gap was +8.9% rather than 1–2%; that Midcap 150 and Smallcap 250 are
+   not one story (61% of windows against 53%, and −5.4% average loss against
+   −20.5% over five years); and that the extreme reading sits at **six months**
+   (91st percentile) rather than at the twelve the claim was about. It is
+   recorded as **provisional**, because the correct comparator is the Nifty 100
+   and its archive does not yet reach 2005.
 
 ---
 
