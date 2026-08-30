@@ -23,7 +23,7 @@ uv run python scripts/check_belief.py --subject <folder> --comparator <folder>
 
 | # | Date | Claim (abbreviated) | Subject | Comparator | Outcome |
 |---|---|---|---|---|---|
-| **B1** | 2026-08-30 | Mid- and small-caps have beaten my portfolio over the past year, more so since I started investing | Midcap 150 TRI, Smallcap 250 TRI | **Nifty 200 TRI** (deficient — see below) | **PARTLY CONFIRMED, AND ONE PREMISE WRONG** |
+| **B1** | 2026-08-30 | Mid- and small-caps have beaten my portfolio over the past year, more so since I started investing | Midcap 150 TRI, Smallcap 250 TRI | Nifty 100 TRI, 2005–2026 | **NOT CONFIRMED — the effect is confined to one half of the archive** |
 
 ---
 
@@ -36,6 +36,8 @@ uv run python scripts/check_belief.py --subject <folder> --comparator <folder>
 > take from the time that I started investing.
 
 **Window:** 2005-04-01 to 2026-08-28 · **Horizons:** 3, 6, 12, 36, 60 months
+**Comparator:** Nifty 100 TRI — large-cap, and containing none of what is being
+measured.
 
 ### The premise that was wrong
 
@@ -44,85 +46,94 @@ The comparison was **an index against a blended portfolio**. The portfolio is
 26%-equity portfolio in a rising market is a statement about asset allocation,
 not about mid-caps.
 
-Measured properly — index against index — the gap is not 1–2%. It is **+8.9%**
-for Midcap 150 and **+7.9%** for Smallcap 250 over the trailing year.
+Measured index against index, the trailing-year gap is **+11.3%** for Midcap 150
+and **+10.2%** for Smallcap 250 — not 1–2%.
 
-Which raises the more interesting question the original framing hid: the
+Which leaves the more interesting question the original framing hid: the
 portfolio nearly kept pace with a pure equity index while holding 26% equity.
 Something carried the other 74%.
 
-### What the archive said
-
-Relative to the Nifty 200 TRI, 2005–2026:
+### What the full archive said
 
 | Horizon | Midcap 150 | | Smallcap 250 | |
 |---|---|---|---|---|
 | | latest | percentile | latest | percentile |
-| 3m | +0.8% | 48th | +5.5% | 77th |
-| 6m | +7.5% | 83rd | **+16.4%** | **91st** |
-| 12m | +8.9% | 69th | +7.9% | 66th |
-| 36m | +23.7% | 54th | +20.7% | 60th |
-| 60m | +63.7% | 72nd | +52.2% | 76th |
+| 3m | +0.9% | 49th | +5.6% | 75th |
+| 6m | +9.4% | 86th | **+18.3%** | **91st** |
+| 12m | +11.3% | 72nd | +10.2% | 69th |
+| 36m | +28.9% | 59th | +25.9% | 64th |
+| 60m | +74.3% | 76th | +62.8% | 77th |
 
-**The 6-month row is the finding.** Smallcap's 6-month relative return sits at
-the **91st percentile of 21 years** while its 12-month figure sits at the 66th.
-The 12-month number is not the whole story — it is an extreme recent run
-averaged together with a poor preceding half-year, and the averaging is what
-makes it look ordinary.
+**The 6-month row is the extreme, not the 12-month one the claim was about.**
+Smallcap's six-month relative return sits at the **91st percentile of 21 years**
+while its twelve-month figure sits at the 69th — an exceptional recent half-year
+averaged with a poor preceding one, and the averaging is what makes the annual
+number look ordinary.
 
-The stated worry going in was that this was another 97th-percentile situation.
-On the horizon actually asked about — one year — **it is not**. On the horizon
-that was not asked about, it very nearly is.
+### The confirmation, and what it destroyed
 
-### The two are not one story
+A13 rule 3 requires an encouraging result to survive a **non-overlapping** second
+window. The archive was split at its own midpoint, 2016-01-01, chosen for being
+the midpoint and nothing else.
 
-| | Beats N200 | Avg win | Avg loss | Worst | Max drawdown |
+The two halves disagree completely.
+
+| | 2005–2015 | 2016–2026 |
+|---|---|---|
+| **Midcap 150**, 12m | 46% hit, median **−2.0%** | 73% hit, median +6.1% |
+| **Smallcap 250**, 12m | 46% hit, median **−2.3%** | 59% hit, median +3.3% |
+| **Midcap 150**, 60m | 41% hit, median **−4.4%** | 95% hit, median +60.4% |
+| **Smallcap 250**, 60m | **20%** hit, median **−14.5%** | 62% hit, median +31.1% |
+
+**For the first eleven years of this archive, mid- and small-caps lost to
+large-caps more often than they won.** Over five-year holds, Smallcap 250 beat
+the Nifty 100 in **one window in five**, with a median of −14.5%.
+
+Every favourable statistic in the full-sample table above is an average of two
+regimes pointing in opposite directions. A 60% twelve-month hit rate is not a
+stable property of Indian mid-caps; it is 46% followed by 73%.
+
+**Status: NOT CONFIRMED.** The second window did not corroborate the first — it
+showed the effect is confined to the half of the archive we have lived through.
+
+### What this does and does not establish
+
+**It does not establish** that mid-caps will revert. A structural change in
+Indian markets after 2016 — domestic institutional flows, SIP growth, wider
+participation — is a real hypothesis and this data cannot rule it out.
+
+**It does establish** that the belief rests on one regime rather than on
+twenty-one years, and that the twenty-one-year figures are the wrong ones to
+quote in its support. Anyone relying on "mid-caps beat large-caps 60% of the
+time" should know that number is a blend of 46% and 73%, and that which one
+applies next is exactly what is unknown.
+
+### The whole-period statistics, for completeness
+
+| | Beats N100, 12m | Avg win | Avg loss | Worst | Max drawdown |
 |---|---|---|---|---|---|
-| **Midcap 150**, 12m | 61% | +12.0% | −6.3% | −17.7% | −72.9% |
-| **Smallcap 250**, 12m | 53% | +17.5% | −10.1% | −29.6% | −75.6% |
+| **Midcap 150** | 60% | +13.4% | −7.8% | −23.5% | −72.9% |
+| **Smallcap 250** | 52% | +18.9% | −11.2% | −31.9% | −75.6% |
+| *Nifty 100* | — | — | — | — | *−61.1%* |
 
-Over 60-month windows the divergence is sharper still: Midcap beats the Nifty
-200 in **83%** of windows with a median of +23.7% and an average loss of −5.4%;
-Smallcap beats it in **52%** with a median of **+2.3%** and a worst window of
-**−59.9%**.
-
-Treating "midcap and smallcap" as one category, which the original claim did, is
-not supported by anything in this table.
+Over 60-month windows against the correct comparator, **Smallcap 250 beats the
+Nifty 100 in only 47% of windows with a median of −3.0%**. Against the Nifty 200
+the same figures were 52% and +2.3% — the contaminated comparator was flattering
+it, exactly as A13 rule 5 anticipated.
 
 ### On the sample size
 
 The 12-month row rests on 5,060 rolling windows and roughly **21 independent
 observations**. Adjacent daily windows share 364 of their 365 days. Every
-percentile above should be read against 21, not 5,060.
+percentile above should be read against 21, not 5,060 — and the split-half table
+rests on about ten each side.
 
-### The deficiency in this check
+### Data
 
-**The comparator is wrong, and known to be wrong.** The Nifty 200 contains the
-Nifty Midcap 100, so measuring mid-caps against it compares a set against a set
-that includes it. The true large-cap-versus-mid-cap gap is therefore **larger**
-than every figure above.
-
-The correct comparator is the Nifty 100, whose archive currently spans only
-2015-01-01 to 2026-08-11 — 11.6 years against the 21.4 required. Per A13 rule 5
-the checker **refuses** that pairing rather than answering the short question
-while reporting the long one:
-
-```
-REFUSED at 3 months
-  NIFTY 100 begins 2015-01-01, 9.8 years after NIFTY MIDCAP 150 begins
-  2005-04-01. Measuring the claim anyway would answer it from the shorter
-  history while reporting the longer one.
-```
-
-**This row is provisional until the Nifty 100 TRI archive is extended to 2005.**
-
-### Confirmation status
-
-**Not confirmed.** A13 rule 3 requires an encouraging result to survive a
-non-overlapping second window before it may inform a decision. The 6-month
-smallcap reading is the one that would need it, and it has not been run — a run
-concentrated in recent months dominates every rolling window that contains it,
-which is precisely what a second window is for.
+Nifty 100 TRI extended to 2003-01-01 on 2026-08-30: **5,880 rows, zero
+defects**, and all 5,311 mid-cap sessions present. Three values spanning the
+pre-existing 2015–2026 files were re-checked against what they read before the
+re-download and matched to the paisa, so the extension introduced no drift.
 
 ---
 

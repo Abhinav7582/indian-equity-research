@@ -247,9 +247,25 @@ Four components:
    a view on anything.
 2. **Drift monitor.** Current versus target, with the rupee trade needed to
    close it, and whether that trade is worth its own cost.
-3. **Pre-trade calculator.** Cost, tax, holding-period and exit-window
-   consequences of a decision **before** it is made. The cost model already does
-   this to the paisa; it needs a front door.
+3. **Pre-trade calculator — BUILT, 2026-08-30.** Cost, tax, holding-period and
+   exit-window consequences of a decision **before** it is made. The cost model
+   already did this to the paisa; it needed a front door.
+
+   `src/indian_equity_research/backtest/pretrade.py` · `scripts/price_trade.py`
+
+   Prices a trade the owner describes: charges on both legs, the applicable
+   section, days to the 365-day cliff and what waiting is worth, remaining
+   ₹1,25,000 exemption, whether the wait also crosses 1 April, and the
+   break-even move a switch has to earn. It recommends nothing.
+
+   **What it showed immediately.** On a ₹5,00,000 position with a ₹1,00,000
+   gain, charges are ₹566 — and tax is **₹19,887, thirty-five times larger**.
+   Switching costs **4.21%** of the position short-term against **0.24%** long-
+   term, an eighteen-fold difference decided by nothing but the calendar.
+
+   And the counterweight it always prints: a tax saving worth 2% of a position
+   is cancelled exactly by a 2% fall in that position. The two numbers are
+   arithmetically identical, and only one of them is usually mentioned.
 4. **Belief checker — BUILT, 2026-08-30.** Any claim about market state tested
    against the archive before it is acted on. Built because a confident belief
    that the market was "at one of its lowest points" turned out to be the
@@ -265,14 +281,21 @@ Four components:
    `src/indian_equity_research/research/beliefs.py` ·
    `scripts/check_belief.py` · `docs/beliefs_log.md`
 
-   **First check, B1** — mid- and small-caps against the archive, 2005–2026 —
-   found the original comparison was an index against a *blended* portfolio, so
-   the real gap was +8.9% rather than 1–2%; that Midcap 150 and Smallcap 250 are
-   not one story (61% of windows against 53%, and −5.4% average loss against
-   −20.5% over five years); and that the extreme reading sits at **six months**
-   (91st percentile) rather than at the twelve the claim was about. It is
-   recorded as **provisional**, because the correct comparator is the Nifty 100
-   and its archive does not yet reach 2005.
+   **First check, B1 — NOT CONFIRMED.** Mid- and small-caps against the Nifty
+   100, 2005–2026. The original comparison was an index against a *blended*
+   26%-equity portfolio, so the real trailing-year gap was **+11.3%**, not 1–2%.
+   The extreme reading sits at **six months** (91st percentile for Smallcap 250)
+   rather than at the twelve months the claim was about.
+
+   Then the A13 second window took it apart. Splitting the archive at its own
+   midpoint, **2005–2015 and 2016–2026 disagree completely**: Midcap 150 beat
+   the Nifty 100 in 46% of twelve-month windows in the first half and 73% in the
+   second; over five-year windows Smallcap 250 won **one window in five** before
+   2016, median −14.5%. Every favourable full-sample statistic is an average of
+   two regimes pointing opposite ways.
+
+   The check cost nothing and prevented a decision resting on eleven years of
+   data being described as resting on twenty-one.
 
 ---
 
