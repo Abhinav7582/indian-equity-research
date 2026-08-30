@@ -242,11 +242,45 @@ which is where the money actually is: one percentage point across ₹65.4 lakh i
 
 Four components:
 
-1. **Declared target allocation with rebalancing bands.** Gold reached 25% by
-   appreciation, not decision. A band rule trims it mechanically and never needs
-   a view on anything.
-2. **Drift monitor.** Current versus target, with the rupee trade needed to
-   close it, and whether that trade is worth its own cost.
+1. **Declared target allocation with rebalancing bands — MACHINERY BUILT,
+   NUMBERS NOT SET.** Gold reached 25% by appreciation, not decision. A band
+   rule trims it mechanically and never needs a view on anything.
+
+   The band rule, the file, the validation and the refusals all exist. **The
+   weights do not, and will not be filled in by this project.** Choosing a
+   target allocation for a real ₹65.4 lakh balance sheet is personal financial
+   advice; the assistant that built the tooling is not a licensed adviser and
+   said so. `configs/target_allocation.yaml` ships with every weight `null`,
+   and the monitor refuses until the owner sets them.
+
+   **This is the only component of Phase 5 that a tool cannot finish.**
+2. **Drift monitor — BUILT, 2026-08-30.** Current versus target, with the rupee
+   trade needed to close it, and whether that trade is worth its own cost.
+
+   `src/indian_equity_research/backtest/drift.py` · `scripts/check_drift.py` ·
+   `configs/target_allocation.yaml`
+
+   **Dual bands, whichever is tighter.** Absolute (±5pp) and relative (±25% of
+   target) together, because each fails alone: 5pp is meaningless on a 3% target
+   and 25% relative permits an 11pp swing on a 45% one. Small positions end up
+   governed by the relative band and large ones by the absolute band, which is
+   the correct way round.
+
+   **The policy is committed to git on purpose.** A target editable without
+   trace after seeing the drift is not a commitment, it is a description of
+   wherever the portfolio already is. Git history dates every change.
+
+   **The template refuses to run.** Every `target_pct` ships as `null` and the
+   monitor raises rather than defaulting, so this project cannot supply an
+   allocation nobody chose. Setting them is the owner's act, not the tooling's.
+
+   Also refuses: targets that do not total 100, a duplicated bucket, a policy
+   with no `declared_on` date, a holding naming an undeclared bucket, and a
+   declared bucket with no holding supplied. Each would otherwise produce a
+   plausible table measured against something wrong.
+
+   Current values are passed at run time. The monitor never reads
+   `data/reference/portfolio.md`, and there is a note in the module saying so.
 3. **Pre-trade calculator — BUILT, 2026-08-30.** Cost, tax, holding-period and
    exit-window consequences of a decision **before** it is made. The cost model
    already did this to the paisa; it needed a front door.

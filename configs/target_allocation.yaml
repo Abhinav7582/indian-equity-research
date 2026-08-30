@@ -1,0 +1,90 @@
+# ===========================================================================
+# DECLARED TARGET ALLOCATION
+#
+# This file is the policy. Everything else in Phase 5 measures against it.
+#
+# It is COMMITTED ON PURPOSE. A target that can be edited silently after
+# seeing the drift is not a commitment — it is a description of wherever the
+# portfolio already happens to be. Git history makes every change to this file
+# visible and dated, which is the only thing that makes it a pre-commitment
+# rather than a rationalisation.
+#
+# WHAT THIS FILE MUST NOT CONTAIN: amounts, account numbers, folio numbers,
+# scheme names, or anything else identifying. Percentages and band widths only.
+# The current value of each bucket is supplied at run time and is never read
+# from here or from data/reference/portfolio.md.
+#
+# WHO SETS THESE NUMBERS: the owner. Not this project, and not the assistant
+# that helped build the tooling around it — setting a target allocation for a
+# real balance sheet is personal financial advice, and it should be arrived at
+# by the person whose money it is, ideally with someone qualified to advise.
+#
+# The weights below are DELIBERATELY LEFT UNSET. The monitor refuses to run
+# against a template, so this file cannot quietly become a default that nobody
+# chose. Replace every `null` with a number, make them total 100, and the
+# refusal stops.
+# ===========================================================================
+
+# Version of this policy. Bump it when the targets change, so a drift report
+# can name which policy it was measured against.
+version: 0
+declared_on: null # YYYY-MM-DD, the date these weights were decided
+declared_by: owner
+
+# ---------------------------------------------------------------------------
+# Band rule
+#
+# A holding counts as drifted when it breaches EITHER band. Both are checked
+# because each fails at one end of the book:
+#
+#   * A 5 percentage-point band is meaningless on a 3% target — the holding
+#     would have to nearly triple before anything registered.
+#   * A 25% relative band is far too loose on a 45% target — it would permit
+#     an 11pp swing in the largest position in the portfolio.
+#
+# Taking whichever is tighter means the smaller positions are governed by the
+# relative band and the larger ones by the absolute band, which is the correct
+# way round.
+# ---------------------------------------------------------------------------
+bands:
+  absolute_pp: 5.0 # percentage points either side of target
+  relative_pct: 25.0 # percent of the target weight, either side
+
+# ---------------------------------------------------------------------------
+# The minimum trade worth making.
+#
+# Rebalancing is not free. Below some size the charges and tax on the trade
+# exceed anything the rebalance is worth, and the honest answer is to leave it
+# alone and correct the drift with the next contribution instead.
+#
+# `min_trade_rupees` is a floor on trade size. `max_cost_fraction` refuses a
+# trade whose modelled friction exceeds this share of the amount being moved —
+# it is the same idea as A7's breadth budget, applied to rebalancing.
+# ---------------------------------------------------------------------------
+economics:
+  min_trade_rupees: 25000.0
+  max_cost_fraction: 0.02 # 2% of the amount moved
+
+# ---------------------------------------------------------------------------
+# The buckets.
+#
+# These names must match the names supplied at run time, exactly. A typo would
+# otherwise create a bucket at 0% target and hide the real one, so the monitor
+# refuses on any name it does not recognise rather than inventing a bucket.
+#
+# The four below are the buckets the portfolio is already organised into. Add,
+# remove or rename them freely — the monitor reads this list, it does not
+# assume it.
+# ---------------------------------------------------------------------------
+buckets:
+  - name: Equity
+    target_pct: null
+
+  - name: Gold / precious metals
+    target_pct: null
+
+  - name: Debt + cash
+    target_pct: null
+
+  - name: US stocks + crypto
+    target_pct: null
