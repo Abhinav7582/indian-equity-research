@@ -90,14 +90,37 @@ def show_corrections(report: DriftReport) -> None:
     print(f"\n  {'bucket':<26}{'trade':>14}{'charges':>11}{'as % moved':>12}")
     for bucket in report.drifted:
         action = "sell" if bucket.trade_rupees < 0 else "buy"
-        charges = bucket.trade_charges or 0.0
+        if bucket.cost_fraction is None:
+            charges = f"{'-':>11}"
+            fraction = f"{'not priced':>12}"
+        else:
+            charges = f"{bucket.trade_charges or 0.0:>11,.0f}"
+            fraction = f"{bucket.cost_fraction:>11.2%}"
         print(
-            f"  {bucket.name:<26}{action:>5} {abs(bucket.trade_rupees):>8,.0f}"
-            f"{charges:>11,.0f}{bucket.cost_fraction:>11.2%}"
+            f"  {bucket.name:<26}{action:>5} {abs(bucket.trade_rupees):>8,.0f}{charges}{fraction}"
         )
     print(f"\n  {'total turnover':<26}{report.total_turnover:>14,.0f}")
 
-    skipped = set(report.drifted) - set(report.worth_making)
+    if report.unpriced:
+        print("\n  NOT PRICED, AND NOT BECAUSE IT IS FREE:")
+        for bucket in report.unpriced:
+            print(f"    {bucket.name}")
+        print(
+            "    The cost model in backtest/costs.py describes exchange-traded\n"
+            "    equity. It does not describe deposits, where the real costs are\n"
+            "    a premature-withdrawal penalty rate and interest taxed at slab.\n"
+            "    Reporting a figure here would be inapplicable rather than\n"
+            "    approximate, so none is reported."
+        )
+
+    # Unpriced buckets are also "skipped", but they were explained above and
+    # listing them here again under an economic heading would imply the cost
+    # test rejected them, when in fact it never ran.
+    skipped = [
+        bucket
+        for bucket in set(report.drifted) - set(report.worth_making)
+        if bucket.cost_fraction is not None
+    ]
     if skipped:
         print("\n  BELOW THE DECLARED ECONOMIC FLOOR:")
         for bucket in sorted(skipped, key=lambda b: b.name):

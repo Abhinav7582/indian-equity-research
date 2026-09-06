@@ -36,6 +36,22 @@ lot is twenty per cent of the gain and dwarfs every charge in the schedule.
 beside the trade itself, and flags the ones whose cost exceeds the declared
 budget. It still does not tell anyone what to do.
 
+Buckets the cost model cannot price
+------------------------------------
+:mod:`indian_equity_research.backtest.costs` is an **equity** cost model. Applied
+to a bucket of fixed deposits it cheerfully returns STT and a DP charge, neither
+of which exists there — what actually applies is a premature-withdrawal penalty
+rate and interest taxed at the holder's slab, and this project models neither.
+
+The first version of this module printed **0.11%** for breaking ₹13.6 lakh of
+deposits. That number was not conservative, or approximate; it was inapplicable,
+and it looked exactly like the ones that were right.
+
+So a bucket may declare ``priced_as: unpriced``, and its charges are then
+reported as **absent rather than as a figure**. Standing rule 5 of the roadmap
+is that a number computed on data with a known defect is discarded, not reported
+with a caveat, and a wrong cost is a defect however carefully it is footnoted.
+
 What is deliberately absent
 ---------------------------
 No field here names an action, and none should be added. The module reports a
@@ -107,6 +123,9 @@ class TargetPolicy:
         min_trade_rupees: Trades below this are reported as too small to make.
         max_cost_fraction: Friction above this share of the amount moved is
             flagged as costing more than the correction is worth.
+        unpriced: Buckets the equity cost model does not describe. Their
+            correcting trades are reported without a cost rather than with a
+            wrong one.
     """
 
     version: int
@@ -115,6 +134,7 @@ class TargetPolicy:
     band: Band
     min_trade_rupees: float
     max_cost_fraction: float
+    unpriced: frozenset[str] = frozenset()
 
     def describe(self) -> str:
         """One line naming the policy a report was measured against."""
@@ -173,10 +193,20 @@ class BucketDrift:
         return self.total * (self.target_pct - self.current_pct) / 100.0
 
     @property
-    def cost_fraction(self) -> float:
-        """Modelled friction as a share of the amount moved."""
+    def is_priced(self) -> bool:
+        """Whether the equity cost model applies to this bucket at all."""
+        return self.trade_charges is not None
+
+    @property
+    def cost_fraction(self) -> float | None:
+        """Modelled friction as a share of the amount moved.
+
+        ``None`` where the cost model does not describe the bucket. Returning
+        0.0 instead would read as *free*, which is a stronger and more
+        flattering claim than *unknown*.
+        """
         if self.trade_charges is None or self.trade_rupees == 0:
-            return 0.0
+            return None
         return self.trade_charges / abs(self.trade_rupees)
 
     def describe(self) -> str:
@@ -220,13 +250,23 @@ class DriftReport:
         does not exceed the declared budget. A drifted bucket that fails either
         is still reported as drifted — it is simply one where the arithmetic
         says a trade is not the way to fix it.
+
+        **An unpriced bucket never appears here.** Passing a cost test that was
+        never computed is the same error as reporting a cost that does not
+        apply, one step further along.
         """
         return tuple(
             bucket
             for bucket in self.drifted
-            if abs(bucket.trade_rupees) >= self.policy.min_trade_rupees
+            if bucket.cost_fraction is not None
+            and abs(bucket.trade_rupees) >= self.policy.min_trade_rupees
             and bucket.cost_fraction <= self.policy.max_cost_fraction
         )
+
+    @property
+    def unpriced(self) -> tuple[BucketDrift, ...]:
+        """Drifted buckets whose correcting trade this project cannot cost."""
+        return tuple(bucket for bucket in self.drifted if not bucket.is_priced)
 
     @property
     def total_turnover(self) -> float:
@@ -280,6 +320,7 @@ def load_policy(path: Path) -> TargetPolicy:
         )
 
     targets: dict[str, float] = {}
+    unpriced: set[str] = set()
     for entry in buckets:
         name = str(entry["name"])
         weight = float(entry["target_pct"])
@@ -288,6 +329,16 @@ def load_policy(path: Path) -> TargetPolicy:
         if name in targets:
             raise DriftError(f"{path} declares {name} twice. One of the two would silently win.")
         targets[name] = weight
+
+        priced_as = str(entry.get("priced_as", "equity")).strip().lower()
+        if priced_as not in {"equity", "unpriced"}:
+            raise DriftError(
+                f"{name} declares priced_as: {priced_as!r}, which is neither "
+                f"'equity' nor 'unpriced'. Guessing would attach an equity cost "
+                f"model to something that may not be equity."
+            )
+        if priced_as == "unpriced":
+            unpriced.add(name)
 
     total = sum(targets.values())
     if abs(total - 100.0) > TOTAL_TOLERANCE_PP:
@@ -316,6 +367,7 @@ def load_policy(path: Path) -> TargetPolicy:
         ),
         min_trade_rupees=float(econ.get("min_trade_rupees", 0.0)),
         max_cost_fraction=float(econ.get("max_cost_fraction", 1.0)),
+        unpriced=frozenset(unpriced),
     )
 
 
@@ -367,7 +419,7 @@ def measure_drift(
         current_pct = 100.0 * value / total
         trade = total * (target - current_pct) / 100.0
         charges = None
-        if abs(trade) > 0:
+        if abs(trade) > 0 and name not in policy.unpriced:
             side = Side.BUY if trade > 0 else Side.SELL
             charges = charges_for(abs(trade), side, on).total
         buckets.append(

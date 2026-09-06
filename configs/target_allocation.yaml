@@ -28,7 +28,7 @@
 # Version of this policy. Bump it when the targets change, so a drift report
 # can name which policy it was measured against.
 version: 0
-declared_on: null # YYYY-MM-DD, the date these weights were decided
+declared_on: 2026-08-31 # YYYY-MM-DD, the date these weights were decided
 declared_by: owner
 
 # ---------------------------------------------------------------------------
@@ -75,16 +75,26 @@ economics:
 # The four below are the buckets the portfolio is already organised into. Add,
 # remove or rename them freely — the monitor reads this list, it does not
 # assume it.
+#
+# `priced_as` says whether the equity cost model in backtest/costs.py describes
+# what is in the bucket. Default is `equity`. Set `unpriced` where it does not,
+# and the report shows no cost rather than a wrong one — deposits pay no STT and
+# no DP charge, they pay a premature-withdrawal penalty and slab-rate tax, and
+# neither is modelled anywhere in this project.
 # ---------------------------------------------------------------------------
 buckets:
   - name: Equity
-    target_pct: null
+    target_pct: 25
+    priced_as: equity
 
   - name: Gold / precious metals
-    target_pct: null
+    target_pct: 24
+    priced_as: equity # SGBs and gold ETFs trade on the exchange
 
   - name: Debt + cash
-    target_pct: null
+    target_pct: 50
+    priced_as: unpriced # mostly deposits; the equity model does not apply
 
   - name: US stocks + crypto
-    target_pct: null
+    target_pct: 1
+    priced_as: unpriced # neither is an Indian exchange-traded equity

@@ -23,6 +23,9 @@ from indian_equity_research.backtest.drift import (
 
 ON = dt.date(2026, 8, 30)
 
+#: Indian Standard Time. Fixed +5:30, no daylight saving anywhere in the year.
+IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+
 
 def policy(
     targets: dict[str, float] | None = None,
@@ -234,18 +237,100 @@ def test_a_missing_policy_file_is_refused(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_committed_template_is_still_a_template() -> None:
-    """The file in configs/ must not acquire targets by accident.
+def test_the_committed_policy_is_valid() -> None:
+    """The declared allocation must always load and always total 100.
 
-    If someone fills it in, this test fails and they must delete it deliberately
-    — which is the point at which the policy stops being this project's default
-    and starts being the owner's declaration.
+    **This test replaced one asserting the file was still a template**, on
+    2026-08-31, when the owner declared the weights. That earlier test existed
+    so the project could not ship an allocation nobody chose, and it fired when
+    the file was filled in — which is what it was for. Deleting it was the
+    deliberate act it was designed to require, and it is recorded here rather
+    than in a commit message so the reason survives with the code.
+
+    What replaces it is the invariant that matters from here: the committed
+    policy is the thing every drift report is measured against, so a broken one
+    silently breaks every report.
     """
     shipped = Path(__file__).resolve().parents[2] / "configs" / "target_allocation.yaml"
     if not shipped.exists():  # pragma: no cover - repo layout guard
-        pytest.skip("template not present")
-    with pytest.raises(DriftError, match="still a template"):
-        load_policy(shipped)
+        pytest.skip("policy not present")
+    loaded = load_policy(shipped)
+    assert sum(loaded.targets.values()) == pytest.approx(100.0, abs=0.5)
+    # India, not UTC. A policy declared on the evening of the 31st in Mumbai is
+    # still the 30th in UTC, and comparing against UTC failed a perfectly valid
+    # file the first time this ran. IST is a fixed +5:30 with no daylight
+    # saving, ever, so the offset is exact rather than an approximation.
+    assert loaded.declared_on <= dt.datetime.now(tz=IST).date()
+    assert loaded.band.absolute_pp > 0
+    assert loaded.band.relative_pct > 0
+
+
+def test_an_unpriced_bucket_reports_no_cost_rather_than_a_wrong_one() -> None:
+    """The equity cost model does not describe deposits.
+
+    Applied to a bucket of fixed deposits it returns STT and a DP charge,
+    neither of which exists there. The first version of this module printed
+    0.11% for breaking Rs 13.6 lakh of deposits — inapplicable rather than
+    approximate, and indistinguishable in the output from the figures that
+    were right.
+    """
+    unpriced_policy = TargetPolicy(
+        version=1,
+        declared_on=dt.date(2026, 8, 31),
+        targets={"Equity": 40.0, "Gold": 10.0, "Debt": 50.0},
+        band=Band(absolute_pp=5.0, relative_pct=25.0),
+        min_trade_rupees=25_000.0,
+        max_cost_fraction=0.02,
+        unpriced=frozenset({"Debt"}),
+    )
+    holdings = {"Equity": 3_000_000.0, "Gold": 2_500_000.0, "Debt": 4_500_000.0}
+    report = measure_drift(unpriced_policy, holdings, ON)
+    by_name = {bucket.name: bucket for bucket in report.buckets}
+    assert by_name["Debt"].cost_fraction is None
+    assert by_name["Debt"].trade_charges is None
+    assert not by_name["Debt"].is_priced
+    assert by_name["Equity"].is_priced
+
+
+def test_an_unpriced_bucket_cannot_pass_a_cost_test_that_never_ran() -> None:
+    """Returning 0.0 would read as free, which is stronger than unknown.
+
+    A bucket whose cost was never computed must not appear among the trades
+    that cleared the cost budget — that is the same error one step further on.
+    """
+    unpriced_policy = TargetPolicy(
+        version=1,
+        declared_on=dt.date(2026, 8, 31),
+        targets={"Equity": 40.0, "Debt": 60.0},
+        band=Band(absolute_pp=5.0, relative_pct=25.0),
+        min_trade_rupees=0.0,
+        max_cost_fraction=1.0,
+        unpriced=frozenset({"Debt"}),
+    )
+    report = measure_drift(unpriced_policy, {"Equity": 1_000_000.0, "Debt": 9_000_000.0}, ON)
+    assert {bucket.name for bucket in report.drifted} == {"Equity", "Debt"}
+    assert {bucket.name for bucket in report.worth_making} == {"Equity"}
+    assert {bucket.name for bucket in report.unpriced} == {"Debt"}
+
+
+def test_an_unrecognised_priced_as_is_refused(tmp_path: Path) -> None:
+    """Guessing would attach an equity cost model to something that is not."""
+    path = write_policy(
+        tmp_path / "t.yaml",
+        "version: 1\ndeclared_on: 2026-08-31\nbuckets:\n"
+        "  - name: Equity\n    target_pct: 100\n    priced_as: shares\n",
+    )
+    with pytest.raises(DriftError, match="neither 'equity' nor 'unpriced'"):
+        load_policy(path)
+
+
+def test_priced_as_defaults_to_equity(tmp_path: Path) -> None:
+    """Omitting the field must not silently make a bucket unpriceable."""
+    path = write_policy(
+        tmp_path / "t.yaml",
+        "version: 1\ndeclared_on: 2026-08-31\nbuckets:\n  - name: Equity\n    target_pct: 100\n",
+    )
+    assert load_policy(path).unpriced == frozenset()
 
 
 def test_no_output_names_an_action() -> None:
