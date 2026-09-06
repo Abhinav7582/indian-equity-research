@@ -24,6 +24,83 @@ uv run python scripts/check_belief.py --subject <folder> --comparator <folder>
 | # | Date | Claim (abbreviated) | Subject | Comparator | Outcome |
 |---|---|---|---|---|---|
 | **B1** | 2026-08-30 | Mid- and small-caps have beaten my portfolio over the past year, more so since I started investing | Midcap 150 TRI, Smallcap 250 TRI | Nifty 100 TRI, 2005–2026 | **NOT CONFIRMED — the effect is confined to one half of the archive** |
+| **B2** | 2026-09-06 | Use an equity MF instead of the RD for one year — the returns are better than an RD | Nifty 100 TRI, 12 monthly buys redeemed at month 12 | RD 6.3% after 30% slab tax | **TRUE ON AVERAGE, UNSAFE FOR THIS PURPOSE** — median +₹10,027 better, but worse than the RD in 31% of programmes and the money has a fixed due date |
+
+---
+
+## B2 — "Shift the RD into an equity MF and redeem after a year"
+
+**Claim, as given:**
+
+> The amount of returns the RD is giving — if we shift that to MF then we can
+> redeem those a year later where the said returns from MF is better than RD.
+> So the only idea is that instead of RD we use MF as an RD for those 1 year
+> period. Nothing is being removed or reduced. It is just a shift.
+
+**Simulated exactly:** ₹20,000 on a session near each month end for 12 months
+into the Nifty 100 TRI, redeemed in full at month 12. **272 overlapping
+programmes, 2003–2026.** Every lot is short-term at redemption — 12 months is
+365 days and s.112A needs *more* than 365 — so 20% STCG applies to all of it.
+
+### The premise is correct
+
+An RD is a poor vehicle for a 30%-slab taxpayer:
+
+```
+12 x Rs 20,000 at 6.3%  ->  matures 248,305, interest 8,305
+after 30% slab tax      ->  net gain 5,814 = 2.42% on money invested
+```
+
+### And the median outcome supports the claim
+
+| | Net gain after tax | vs RD |
+|---|---:|---:|
+| worst (programme starting Oct 2007) | **−₹1,09,252** | −₹1,15,066 |
+| p5 | −₹32,115 | −₹37,929 |
+| p10 | −₹7,829 | −₹13,643 |
+| median | **+₹15,841** | **+₹10,027** |
+| p90 | +₹51,991 | +₹46,177 |
+| best | +₹1,21,570 | +₹1,15,756 |
+
+### But the distribution is the finding, because this money has a due date
+
+```
+worse than the RD    in 31% of programmes
+lost money           in 20%
+lost more than 10%   in  7%
+```
+
+The ₹2,40,000 exists to pay **PPF ₹1,50,000 + LIC ₹1,04,515 = ₹2,54,515** on a
+date nobody chooses. Against that obligation:
+
+| Outcome | Value at month 12 | |
+|---|---:|---|
+| median equity | ₹2,55,841 | covers it |
+| RD | ₹2,45,814 | short ₹8,701 |
+| equity, 10th percentile | ₹2,32,171 | short ₹22,344 |
+| equity, worst | ₹1,30,748 | **short ₹1,23,767** |
+
+**Note the RD does not fully cover it either** — ₹2,40,000 invested against
+₹2,54,515 owed. A small gap is already being met from elsewhere.
+
+### The vehicle built for exactly this
+
+| | pre-tax | tax | net gain | vs RD |
+|---|---:|---:|---:|---:|
+| RD 6.3% | 6.3% | 30% slab | ₹5,814 | — |
+| Short-duration debt ~7.0% | 7.0% | 30% slab | ₹6,304 | +₹490 |
+| **Arbitrage fund ~6.5%** | 6.5% | **20% equity STCG** | ₹6,695 | **+₹881** |
+| **Arbitrage fund ~7.0%** | 7.0% | **20% equity STCG** | ₹7,205 | **+₹1,391** |
+
+Arbitrage funds carry **equity taxation on a near-debt risk profile** — which is
+precisely the mismatch the RD suffers from, solved without taking equity's
+distribution. Smaller upside than equity's median, and no realistic path to
+being ₹1.2 lakh short.
+
+**Verdict: the insight is right and the vehicle is wrong.** Equity over a fixed
+twelve-month window ending on a payment date is not an RD substitute; it is a
+20% chance of arriving short. This is Phase 6 instrument #2, and it has now
+earned its priority.
 
 ---
 

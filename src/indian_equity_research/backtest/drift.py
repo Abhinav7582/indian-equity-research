@@ -73,11 +73,14 @@ from indian_equity_research.backtest.costs import Side, charges_for
 __all__ = [
     "Band",
     "BucketDrift",
+    "ContributionPlan",
+    "ContributionShare",
     "DriftError",
     "DriftReport",
     "TargetPolicy",
     "load_policy",
     "measure_drift",
+    "route_contribution",
 ]
 
 # A total that misses 100 by more than this is a mistake rather than rounding.
@@ -281,6 +284,155 @@ class DriftReport:
             f"{self.on}: {len(self.drifted)} of {len(self.buckets)} buckets drifted, "
             f"{self.total_turnover:,.0f} to correct"
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ContributionShare:
+    """What one bucket receives from a contribution, and what it does to it."""
+
+    name: str
+    amount: float
+    before_pct: float
+    after_pct: float
+    target_pct: float
+    gap_rupees_before: float
+
+    @property
+    def closes(self) -> float:
+        """Fraction of this bucket's shortfall the contribution closes."""
+        if self.gap_rupees_before <= 0:
+            return 0.0
+        return min(1.0, self.amount / self.gap_rupees_before)
+
+    def months_to_target(self, per_period: float) -> float:
+        """Periods of this size needed to reach target, ignoring returns.
+
+        Ignoring returns is deliberate and conservative in the direction that
+        matters: a bucket that grows faster than the rest closes its own gap,
+        and one that falls needs more than this says. It is an order of
+        magnitude, not a schedule.
+        """
+        if self.gap_rupees_before <= 0 or per_period <= 0:
+            return 0.0
+        return self.gap_rupees_before / per_period
+
+
+@dataclass(frozen=True, slots=True)
+class ContributionPlan:
+    """How new money is split across buckets, and what it leaves behind.
+
+    Nothing is sold. That is the whole point: a contribution moves the
+    allocation without realising a gain, so it pays no capital gains tax and
+    none of the exit charges a rebalancing sale would.
+    """
+
+    amount: float
+    on: date
+    shares: tuple[ContributionShare, ...]
+    total_before: float
+
+    @property
+    def total_after(self) -> float:
+        """Portfolio total once the contribution lands."""
+        return self.total_before + self.amount
+
+    @property
+    def receiving(self) -> tuple[ContributionShare, ...]:
+        """Only the buckets that actually get money, largest first."""
+        return tuple(
+            sorted(
+                (s for s in self.shares if s.amount > 0),
+                key=lambda s: s.amount,
+                reverse=True,
+            )
+        )
+
+    def describe(self) -> str:
+        """One line for a report."""
+        names = ", ".join(f"{s.name} {s.amount:,.0f}" for s in self.receiving)
+        return f"{self.amount:,.0f} on {self.on}: {names or 'nothing underweight'}"
+
+
+def route_contribution(
+    report: DriftReport,
+    amount: float,
+    *,
+    on: date | None = None,
+) -> ContributionPlan:
+    """Split new money across the buckets that sit below target.
+
+    Allocation is **proportional to each bucket's rupee shortfall**, so every
+    gap closes at the same rate rather than one being filled before another
+    starts. Chosen over filling the worst gap first because it is predictable
+    month to month and does not swing the whole contribution between buckets on
+    small changes in relative weight.
+
+    The shortfall is measured against the total **after** the contribution
+    lands, not before. Using the pre-contribution total would systematically
+    under-fill: adding money raises the denominator, so a bucket needs more
+    than its current gap to reach the same percentage afterwards.
+
+    When the contribution exceeds every shortfall combined, the remainder is
+    spread by target weight — which holds the allocation where it is rather
+    than pushing some bucket past target.
+
+    Args:
+        report: A drift measurement to route against.
+        amount: New money. Must not be negative.
+        on: Date of the contribution. Defaults to the report's date.
+
+    Returns:
+        The plan.
+
+    Raises:
+        DriftError: if ``amount`` is negative. Routing a withdrawal through a
+            function that never sells would silently return nonsense.
+    """
+    if amount < 0:
+        raise DriftError(
+            f"amount must not be negative, got {amount}. This routes money in; "
+            f"it does not model a withdrawal, and pretending it does would "
+            f"produce a plan that cannot be executed."
+        )
+
+    total_after = report.total + amount
+    # Shortfall measured against the post-contribution total. A bucket at 20%
+    # of 100 needs more than 5 to reach 25% of 105.
+    shortfalls = {
+        bucket.name: max(0.0, total_after * bucket.target_pct / 100.0 - bucket.value)
+        for bucket in report.buckets
+    }
+    total_short = sum(shortfalls.values())
+
+    allocation: dict[str, float] = dict.fromkeys(shortfalls, 0.0)
+    if amount > 0 and total_short > 0:
+        share = min(amount, total_short)
+        for name, short in shortfalls.items():
+            allocation[name] = share * short / total_short
+        leftover = amount - share
+        if leftover > 0:
+            for bucket in report.buckets:
+                allocation[bucket.name] += leftover * bucket.target_pct / 100.0
+    elif amount > 0:
+        # Nothing is underweight. Spread by target weight, which holds the
+        # allocation still rather than tipping a bucket past its band.
+        for bucket in report.buckets:
+            allocation[bucket.name] += amount * bucket.target_pct / 100.0
+
+    shares = tuple(
+        ContributionShare(
+            name=bucket.name,
+            amount=allocation[bucket.name],
+            before_pct=bucket.current_pct,
+            after_pct=100.0 * (bucket.value + allocation[bucket.name]) / total_after,
+            target_pct=bucket.target_pct,
+            gap_rupees_before=shortfalls[bucket.name],
+        )
+        for bucket in report.buckets
+    )
+    return ContributionPlan(
+        amount=amount, on=on or report.on, shares=shares, total_before=report.total
+    )
 
 
 def load_policy(path: Path) -> TargetPolicy:
